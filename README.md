@@ -163,8 +163,8 @@ acc.signTransaction(tx).then((res)=>{
    console.log(stx.rawTransaction);
    web3.eth.sendSignedTransaction(stx.rawTransaction).then(console)});
 ```
-*Note: ELA testnet server Deploy Contract Address: `0x491bC043672B9286fA02FA7e0d6A3E5A0384A31A`
-ELA mainnet server Deploy Contract Address: `0xC445f9487bF570fF508eA9Ac320b59730e81e503`*
+*Note: ELA testnet server Deploy Contract Address: `0x0000000000000000000000000000000000000064`
+ELA mainnet server Deploy Contract Address: `0x0000000000000000000000000000000000000064`*
 
 ### Configuration
 
@@ -346,7 +346,7 @@ from anyone on the internet, and are grateful for even the smallest of fixes!
 
 If you'd like to contribute to pgp-chain, please fork, fix, commit and send a pull request
 for the maintainers to review and merge into the main code base. If you wish to submit
-more complex changes though, please check up with the core devs first on [our gitter channel](https://gitter.im/elastos/pgp-chain)
+more complex changes though, please check up with the core devs first on [our gitter channel](https://gitter.im/pgprotocol/pgp-chain)
 to ensure those changes are in line with the general philosophy of the project and/or get
 some early feedback which can make both your efforts much lighter as well as our review
 and merge procedures quick and simple.

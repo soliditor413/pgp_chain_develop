@@ -10,7 +10,7 @@ fi
 # Create fake Go workspace if it doesn't exist yet.
 workspace="$PWD/build/_workspace"
 root="$PWD"
-ethdir="$workspace/src/github.com/elastos"
+ethdir="$workspace/src/github.com/pgprotocol"
 if [ ! -L "$ethdir/pgp-chain" ]; then
     mkdir -p "$ethdir"
     cd "$ethdir"

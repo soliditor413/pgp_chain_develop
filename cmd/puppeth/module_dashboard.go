@@ -211,7 +211,7 @@ var dashboardContent = `
 											<pre>ethereumwallet --rpc $HOME/.{{.Network}}/geth.ipc --node-networkid={{.NetworkID}} --node-datadir=$HOME/.{{.Network}}{{if .Ethstats}} --node-ethstats='{{.Ethstats}}'{{end}} --node-bootnodes={{.BootnodesFlat}}</pre>
 										<p>
 										<br/>
-										<p>You can download the Ethereum Wallet from <a href="https://github.com/elastos/mist/releases" target="about:blank">https://github.com/elastos/mist/releases</a>.</p>
+										<p>You can download the Ethereum Wallet from <a href="https://github.com/pgpprotocol/mist/releases" target="about:blank">https://github.com/pgpprotocol/mist/releases</a>.</p>
 									</div>
 								</div>
 							</div>
@@ -232,7 +232,7 @@ var dashboardContent = `
 											<pre>mist --rpc $HOME/.{{.Network}}/geth.ipc --node-networkid={{.NetworkID}} --node-datadir=$HOME/.{{.Network}}{{if .Ethstats}} --node-ethstats='{{.Ethstats}}'{{end}} --node-bootnodes={{.BootnodesFlat}}</pre>
 										<p>
 										<br/>
-										<p>You can download the Mist browser from <a href="https://github.com/elastos/mist/releases" target="about:blank">https://github.com/elastos/mist/releases</a>.</p>
+										<p>You can download the Mist browser from <a href="https://github.com/pgpprotocol/mist/releases" target="about:blank">https://github.com/pgpprotocol/mist/releases</a>.</p>
 									</div>
 								</div>
 							</div>

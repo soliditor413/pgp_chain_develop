@@ -181,7 +181,7 @@ jobs:
 #        - unzip -q android-ndk-r19b.zip && rm android-ndk-r19b.zip
 #        - mv android-ndk-r19b $ANDROID_HOME/ndk-bundle
 #
-#        - mkdir -p $GOPATH/src/github.com/elastos
+#        - mkdir -p $GOPATH/src/github.com/pgprotocol
 #        - ln -s `pwd` $GOPATH/src/github.com/pgprotocol/pgp-chain
 #        - go run build/ci.go aar -signer ANDROID_SIGNING_KEY -deploy https://oss.sonatype.org -upload gethstore/builds
 #
