@@ -43,7 +43,7 @@ var DefaultConfig = Config{
 		DatasetsInMem:  1,
 		DatasetsOnDisk: 2,
 	},
-	NetworkId:          800006,
+	NetworkId:          12343,
 	LightPeers:         100,
 	UltraLightFraction: 75,
 	DatabaseCache:      512,

@@ -378,7 +378,10 @@ func DefaultGenesisBlock() *Genesis {
 	extra = append(extra, bytes.Repeat([]byte{0x00}, 65)...)
 	genesis.ExtraData = extra
 	genesis.Alloc = GenesisAlloc{
-		params.WithdrawalContractAddress: {Code: params.WithdrawalContractCode},
+		params.WithdrawalContractAddress: {
+			Code:    params.WithdrawalContractCode,
+			Balance: big.NewInt(0),
+		},
 	}
 	return genesis
 }
@@ -421,7 +424,10 @@ func DefaultTestnetGenesisBlock() *Genesis {
 	extra = append(extra, bytes.Repeat([]byte{0x00}, 65)...)
 	genesis.ExtraData = extra
 	genesis.Alloc = GenesisAlloc{
-		params.WithdrawalContractAddress: {Code: params.WithdrawalContractCode},
+		params.WithdrawalContractAddress: {
+			Code:    params.WithdrawalContractCode,
+			Balance: big.NewInt(0),
+		},
 	}
 	return genesis
 
@@ -465,7 +471,10 @@ func DefaultRinkebyGenesisBlock() *Genesis {
 	extra = append(extra, bytes.Repeat([]byte{0x00}, 65)...)
 	genesis.ExtraData = extra
 	genesis.Alloc = GenesisAlloc{
-		params.WithdrawalContractAddress: {Code: params.WithdrawalContractCode},
+		params.WithdrawalContractAddress: {
+			Code:    params.WithdrawalContractCode,
+			Balance: big.NewInt(0),
+		},
 	}
 	return genesis
 }

@@ -28,8 +28,8 @@ import (
 
 // Genesis hashes to enforce below configs on.
 var (
-	MainnetGenesisHash = common.HexToHash("0x0816be175499dad8a296e8cd8369d93c9b48c5456209a202211f762051a757ae")
-	TestnetGenesisHash = common.HexToHash("0xc36e8522a9e463e9d8c1c5472713ed45f4b31936f9817de0e00a2a7fe847b908")
+	MainnetGenesisHash = common.HexToHash("0x02820c5adc8ee4fb77aad842ac05d95ed8b1041d80c03ba79f8f11c4af60d87c")
+	TestnetGenesisHash = common.HexToHash("0x3043bcc03c90a37a292a4357ee972bc392b143e75e1b79205e113688e3bd071b")
 	RinkebyGenesisHash = common.HexToHash("0x14970cef05d63c9dd563ad99a581bcbce98a29257a97580e1daa7a9371a61e47")
 	GoerliGenesisHash  = common.HexToHash("0xbf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a")
 )
@@ -57,8 +57,8 @@ var CheckpointOracles = map[common.Hash]*CheckpointOracleConfig{
 var (
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{
-		OldChainID:          big.NewInt(800006),
-		ChainID:             big.NewInt(800006),
+		OldChainID:          big.NewInt(12343),
+		ChainID:             big.NewInt(12343),
 		HomesteadBlock:      big.NewInt(1),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
@@ -129,8 +129,8 @@ var (
 
 	// TestnetChainConfig contains the chain parameters to run a node on the Ropsten test network.
 	TestnetChainConfig = &ChainConfig{
-		OldChainID:          big.NewInt(800007),
-		ChainID:             big.NewInt(800007),
+		OldChainID:          big.NewInt(12343),
+		ChainID:             big.NewInt(12343),
 		HomesteadBlock:      big.NewInt(1),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
@@ -202,8 +202,8 @@ var (
 
 	// RinkebyChainConfig contains the chain parameters to run a node on the Rinkeby test network.
 	RinkebyChainConfig = &ChainConfig{
-		OldChainID:          big.NewInt(800008),
-		ChainID:             big.NewInt(800008),
+		OldChainID:          big.NewInt(12343),
+		ChainID:             big.NewInt(12343),
 		HomesteadBlock:      big.NewInt(1),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
@@ -272,8 +272,8 @@ var (
 	}
 	// GoerliChainConfig contains the chain parameters to run a node on the Görli test network.
 	GoerliChainConfig = &ChainConfig{
-		OldChainID:          big.NewInt(23),
-		ChainID:             big.NewInt(24),
+		OldChainID:          big.NewInt(12343),
+		ChainID:             big.NewInt(12343),
 		HomesteadBlock:      big.NewInt(1),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,

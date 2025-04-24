@@ -807,7 +807,7 @@ var (
 	DynamicArbiter = cli.Uint64Flag{
 		Name:  "spv.arbiter.height",
 		Usage: "configue the offset blocks to pre-connect to switch to pbft consensus",
-		Value: 1034900,
+		Value: 1,
 	}
 	FrozenAccount = cli.StringSliceFlag{
 		Name:  "frozen.account.list",
@@ -1636,48 +1636,34 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	switch {
 	case ctx.GlobalBool(TestnetFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 800007
+			cfg.NetworkId = 12343
 		}
 		cfg.Genesis = core.DefaultTestnetGenesisBlock()
-		cfg.BlackContractAddr = "0x491bC043672B9286fA02FA7e0d6A3E5A0384A31A"
 		if !ctx.GlobalIsSet(DataDirFlag.Name) {
 			cfg.EvilSignersJournalDir = filepath.Join(node.DefaultDataDir(), "testnet", "geth")
 		}
-		if !ctx.GlobalIsSet(DynamicArbiter.Name) {
-			cfg.DynamicArbiterHeight = 1
-		}
-		if !ctx.GlobalIsSet(FrozenAccount.Name) {
-			ctx.GlobalSet(FrozenAccount.Name, "0x6527946c8b26cc203f9674a5e1d8178beeed70c1")
-		}
-		cfg.ArbiterListContract = "0xcEAA743AA3D1E771600e34c7F18c9e30AB63EEb2"
+		//if !ctx.GlobalIsSet(FrozenAccount.Name) {
+		//	ctx.GlobalSet(FrozenAccount.Name, "0x6527946c8b26cc203f9674a5e1d8178beeed70c1")
+		//}
 	case ctx.GlobalBool(RinkebyFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 800008
+			cfg.NetworkId = 12343
 		}
 		cfg.Genesis = core.DefaultRinkebyGenesisBlock()
-		cfg.BlackContractAddr = "0x491bC043672B9286fA02FA7e0d6A3E5A0384A31A"
 		if !ctx.GlobalIsSet(DataDirFlag.Name) {
 			cfg.EvilSignersJournalDir = filepath.Join(node.DefaultDataDir(), "rinkeby", "geth")
 		}
-		if !ctx.GlobalIsSet(DynamicArbiter.Name) {
-			cfg.DynamicArbiterHeight = 2
-		}
-		cfg.ArbiterListContract = "0xcEAA743AA3D1E771600e34c7F18c9e30AB63EEb2"
 	case ctx.GlobalBool(GoerliFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 800009
+			cfg.NetworkId = 12343
 		}
 		cfg.Genesis = core.DefaultGoerliGenesisBlock()
-		cfg.BlackContractAddr = "0x491bC043672B9286fA02FA7e0d6A3E5A0384A31A"
 		if !ctx.GlobalIsSet(DataDirFlag.Name) {
 			cfg.EvilSignersJournalDir = filepath.Join(node.DefaultDataDir(), "goerli", "geth")
 		}
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337
-		}
-		if !ctx.GlobalIsSet(DynamicArbiter.Name) {
-			cfg.DynamicArbiterHeight = 3
 		}
 		// Create new developer account or reuse existing one
 		var (
