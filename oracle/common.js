@@ -40,6 +40,7 @@ web3.extend({
     ]
 });
 const contract = new web3.eth.Contract(ctrt.abi);
+contract.options.address = ctrt.address;
 const pledgeBill = new web3.eth.Contract(pledgeBillContract.abi)
 console.log(JSON.stringify(process.env.env));
 switch (process.env.env) {
