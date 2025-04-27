@@ -830,7 +830,7 @@ var (
 		Name:  "developer.fee.contract",
 		Usage: "configue developer fee contract address",
 		Value: &cli.StringSlice{
-			"0xc34a9318d0F436eB02FBA6eCF32eacc5Ea86454D",
+			"0x0B54BFD3D1cd46DBa9e3d915d685aDd95F60822f",
 		},
 	}
 )
