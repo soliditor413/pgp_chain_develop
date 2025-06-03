@@ -25,7 +25,6 @@ import (
 	"github.com/pgprotocol/pgp-chain/ethdb/leveldb"
 	"github.com/pgprotocol/pgp-chain/event"
 	"github.com/pgprotocol/pgp-chain/log"
-	"github.com/pgprotocol/pgp-chain/params"
 	"github.com/pgprotocol/pgp-chain/pledgeBill"
 	"github.com/pgprotocol/pgp-chain/rpc"
 	"github.com/pgprotocol/pgp-chain/smallcrosstx"
@@ -1232,16 +1231,14 @@ func GetClient() *ethclient.Client {
 }
 
 func GetMinGasPrice(spvHeight uint32) (*big.Int, error) {
-	return big.NewInt(500 * params.GWei), nil
-	//now is not used
-	//if SpvService == nil {
-	//	return big.NewInt(0), errors.New("spv service is nil")
-	//}
-	//if spvHeight == 0 {
-	//	spvHeight = uint32(GetSpvHeight())
-	//}
-	//price, err := SpvService.GetMinGasPrice(spvHeight, SpvService.GenesisHash)
-	//return price, err
+	if SpvService == nil {
+		return big.NewInt(0), errors.New("spv service is nil")
+	}
+	if spvHeight == 0 {
+		spvHeight = uint32(GetSpvHeight())
+	}
+	price, err := SpvService.GetMinGasPrice(spvHeight, SpvService.GenesisHash)
+	return price, err
 }
 
 func Close() {

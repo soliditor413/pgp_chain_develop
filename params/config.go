@@ -39,10 +39,10 @@ func newUint64(val uint64) *uint64 { return &val }
 // TrustedCheckpoints associates each known checkpoint with the genesis hash of
 // the chain it belongs to.
 var TrustedCheckpoints = map[common.Hash]*TrustedCheckpoint{
-	MainnetGenesisHash: MainnetTrustedCheckpoint,
-	TestnetGenesisHash: TestnetTrustedCheckpoint,
-	RinkebyGenesisHash: RinkebyTrustedCheckpoint,
-	GoerliGenesisHash:  GoerliTrustedCheckpoint,
+	MainnetGenesisHash: nil,
+	TestnetGenesisHash: nil,
+	RinkebyGenesisHash: nil,
+	GoerliGenesisHash:  nil,
 }
 
 // CheckpointOracles associates each known checkpoint oracles with the genesis hash of
@@ -83,18 +83,18 @@ var (
 		PreConnectOffset: 20,
 		Pbft: &PbftConfig{
 			Producers: []string{
-				"02089d7e878171240ce0e3633d3ddc8b1128bc221f6b5f0d1551caa717c7493062",
-				"0268214956b8421c0621d62cf2f0b20a02c2dc8c2cc89528aff9bd43b45ed34b9f",
-				"03cce325c55057d2c8e3fb03fb5871794e73b85821e8d0f96a7e4510b4a922fad5",
-				"02661637ae97c3af0580e1954ee80a7323973b256ca862cfcf01b4a18432670db4",
-				"027d816821705e425415eb64a9704f25b4cd7eaca79616b0881fc92ac44ff8a46b",
-				"02d4a8f5016ae22b1acdf8a2d72f6eb712932213804efd2ce30ca8d0b9b4295ac5",
-				"029a4d8e4c99a1199f67a25d79724e14f8e6992a0c8b8acf102682bd8f500ce0c1",
-				"02871b650700137defc5d34a11e56a4187f43e74bb078e147dd4048b8f3c81209f",
-				"02fc66cba365f9957bcb2030e89a57fb3019c57ea057978756c1d46d40dfdd4df0",
-				"03e3fe6124a4ea269224f5f43552250d627b4133cfd49d1f9e0283d0cd2fd209bc",
-				"02b95b000f087a97e988c24331bf6769b4a75e4b7d5d2a38105092a3aa841be33b",
-				"02a0aa9eac0e168f3474c2a0d04e50130833905740a5270e8a44d6c6e85cf6d98c",
+				"023aff59a6e169577726f545457df1fe219e3d9f73c8d6f34f804433127618c231",
+				"02c731d08da8500fe116f9b3e6d97e50dba4e04784433ea41e24a13d652768a8ae",
+				"03eb965d24cdddea301135a46cd27e29f955016933049002b68b60418f00b3a415",
+				"03a5e6f446493aa2b304194388a3f445c286ccf2c58843611225c4b008d928dfb0",
+				"02288a3f6374f8c1618fb89cb7f44f2c0c974c88adee038618dce7439ae6455787",
+				"035297266cfd746128ac1c7baefc76d56680a728bed01211fa9f4df1af483b269c",
+				"02344d45e2ac5bef75140c39bf92ce06547968deac6bfca7d43ca3377142dfb081",
+				"02daed4764e4802e98dc5d0da60dc9e0003faf0b89dd562e2642e225f5f26f6f73",
+				"0308cfbc08db6def441f00dd0aed8cc09ae88a39460804a5adad93e4228ee83c97",
+				"03188d1e2199e7f2319d8e16519dcca2892116f2113c2c65745c4aa978778c69a0",
+				"02d36ad9ac8246b781941e6366b1deb0e36403a3bee7ad018a5fa2d90df76401d9",
+				"034aac70edd1721813c12264deb0acc89f316b30cf96d2c0a4c4acd481e458dba3",
 			},
 			PrintLevel:     0,
 			MaxLogsSize:    0,
