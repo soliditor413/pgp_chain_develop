@@ -59,11 +59,11 @@ var (
 	retestethCommand = cli.Command{
 		Action:      utils.MigrateFlags(retesteth),
 		Name:        "retesteth",
-		Usage:       "Launches geth in retesteth mode",
+		Usage:       "Launches pgp in retesteth mode",
 		ArgsUsage:   "",
 		Flags:       []cli.Flag{rpcPortFlag},
 		Category:    "MISCELLANEOUS COMMANDS",
-		Description: `Launches geth in retesteth mode (no database, no network, only retesteth RPC interface)`,
+		Description: `Launches pgp in retesteth mode (no database, no network, only retesteth RPC interface)`,
 	}
 )
 

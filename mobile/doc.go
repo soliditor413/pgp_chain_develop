@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the pgp-chain library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package geth contains the simplified mobile APIs to pgp-chain.
+// Package pgp contains the simplified mobile APIs to pgp-chain.
 //
 // The scope of this package is *not* to allow writing a custom Ethereum client
 // with pieces plucked from pgp-chain, rather to allow writing native dapps on

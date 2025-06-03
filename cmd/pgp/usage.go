@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with pgp-chain. If not, see <http://www.gnu.org/licenses/>.
 
-// Contains the geth command usage template and generator.
+// Contains the pgp command usage template and generator.
 
 package main
 

@@ -424,7 +424,7 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 	}
 
 	spec.Params.MaxCodeSize = params.MaxCodeSize
-	// geth has it set from zero
+	// pgp has it set from zero
 	spec.Params.MaxCodeSizeTransition = 0
 
 	// Disable this one

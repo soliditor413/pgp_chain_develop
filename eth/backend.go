@@ -529,7 +529,7 @@ func makeExtraData(extra []byte) []byte {
 		// create default extradata
 		extra, _ = rlp.EncodeToBytes([]interface{}{
 			uint(params.VersionMajor<<32 | params.VersionMinor<<16 | params.VersionPatch<<8 | params.VersionCross),
-			"geth",
+			"pgp",
 			runtime.Version(),
 			runtime.GOOS,
 		})

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with pgp-chain. If not, see <http://www.gnu.org/licenses/>.
 
-// geth is the official command-line client for Ethereum.
+// pgp is the official command-line client for Ethereum.
 package main
 
 import (
@@ -67,7 +67,7 @@ import (
 )
 
 const (
-	clientIdentifier = "geth" // Client identifier to advertise over the network
+	clientIdentifier = "pgp" // Client identifier to advertise over the network
 )
 
 var (
@@ -534,7 +534,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	evts := make(chan accounts.WalletEvent, 16)
 	stack.AccountManager().Subscribe(evts)
 
-	// Create a client to interact with local geth node.
+	// Create a client to interact with local pgp node.
 	rpcClient, err := stack.Attach()
 	if err != nil {
 		utils.Fatalf("Failed to attach to self: %v", err)

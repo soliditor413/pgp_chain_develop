@@ -15,7 +15,7 @@ them using your favourite package manager. Once the dependencies are installed, 
 ```shell
 export GO111MODULE=on
 go mod tidy
-make geth
+make pgp
 ```
 
 or, to build the full suite of utilities:
@@ -72,7 +72,7 @@ particular use-case the user doesn't care about years-old historical data, so we
 fast-sync quickly to the current state of the network. To do so:
 
 ```shell
-$ geth console
+$ pgp console
 ```
 
 This command will:
@@ -94,7 +94,7 @@ network, you want to join the **test** network with your node, which is fully eq
 the main network, but with play-Ether only.
 
 ```shell
-$ geth --testnet console
+$ pgp --testnet console
 ```
 
 The `console` subcommand has the exact same meaning as above and they are equally
@@ -128,7 +128,7 @@ to a proof-of-authority based test network called [*Rinkeby*](https://www.rinkeb
 supported by pgp-chain.
 
 ```shell
-$ geth --rinkeby console
+$ pgp --rinkeby console
 ```
 
 ### How to topup ELA to ETH
@@ -172,14 +172,14 @@ As an alternative to passing the numerous flags to the `geth` binary, you can al
 configuration file via:
 
 ```shell
-$ geth --config /path/to/your_config.toml
+$ pgp --config /path/to/your_config.toml
 ```
 
 To get an idea how the file should look like you can use the `dumpconfig` subcommand to
 export your existing configuration:
 
 ```shell
-$ geth --your-favourite-flags dumpconfig
+$ pgp --your-favourite-flags dumpconfig
 ```
 
 *Note: This works only with `geth` v1.6.0 and above.*
@@ -277,7 +277,7 @@ With the genesis state defined in the above JSON file, you'll need to initialize
 set:
 
 ```shell
-$ geth init path/to/genesis.json
+$ pgp init path/to/genesis.json
 ```
 
 #### Creating the rendezvous point
@@ -307,7 +307,7 @@ probably also be desirable to keep the data directory of your private network se
 do also specify a custom `--datadir` flag.
 
 ```shell
-$ geth --datadir=path/to/custom/data/folder --bootnodes=<bootnode-enode-url-from-above>
+$ pgp --datadir=path/to/custom/data/folder --bootnodes=<bootnode-enode-url-from-above>
 ```
 
 *Note: Since your network will be completely cut off from the main and test networks, you'll
@@ -327,7 +327,7 @@ ones either). To start a `geth` instance for mining, run it with all your usual 
 by:
 
 ```shell
-$ geth <usual-flags> --mine --miner.threads=1 --etherbase=0x0000000000000000000000000000000000000000
+$ pgp <usual-flags> --mine --miner.threads=1 --etherbase=0x0000000000000000000000000000000000000000
 ```
 
 Which will start mining blocks and transactions on a single CPU thread, crediting all

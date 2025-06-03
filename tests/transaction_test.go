@@ -37,7 +37,7 @@ func TestTransaction(t *testing.T) {
 	// calculating the final cozt
 	txt.skipLoad(".*TransactionWithGasPriceOverflow.*")
 
-	// The nonce is too large for uint64. Not a concern, it means geth won't
+	// The nonce is too large for uint64. Not a concern, it means pgp won't
 	// accept transactions at a certain point in the distant future
 	txt.skipLoad("^ttNonce/TransactionWithHighNonce256.json")
 

@@ -724,7 +724,7 @@ var (
 	MetricsInfluxDBDatabaseFlag = cli.StringFlag{
 		Name:  "metrics.influxdb.database",
 		Usage: "InfluxDB database name to push reported metrics to",
-		Value: "geth",
+		Value: "pgp",
 	}
 	MetricsInfluxDBUsernameFlag = cli.StringFlag{
 		Name:  "metrics.influxdb.username",
@@ -1118,7 +1118,7 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 	log.Warn("-------------------------------------------------------------------")
 	log.Warn("Referring to accounts by order in the keystore folder is dangerous!")
 	log.Warn("This functionality is deprecated and will be removed in the future!")
-	log.Warn("Please use explicit addresses! (can search via `geth account list`)")
+	log.Warn("Please use explicit addresses! (can search via `pgp account list`)")
 	log.Warn("-------------------------------------------------------------------")
 
 	accs := ks.Accounts()
@@ -1612,9 +1612,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 
 	cfg.BlackContractAddr = ctx.GlobalString(BlackContractAddr.Name)
 	cfg.PassBalance = ctx.GlobalUint64(PassBalance.Name)
-	cfg.EvilSignersJournalDir = filepath.Join(node.DefaultDataDir(), "geth")
+	cfg.EvilSignersJournalDir = filepath.Join(node.DefaultDataDir(), "pgp")
 	if ctx.GlobalIsSet(DataDirFlag.Name) {
-		cfg.EvilSignersJournalDir = filepath.Join(ctx.GlobalString(DataDirFlag.Name), "geth")
+		cfg.EvilSignersJournalDir = filepath.Join(ctx.GlobalString(DataDirFlag.Name), "pgp")
 	}
 	cfg.PreConnectOffset = ctx.GlobalUint64(PreConnectOffset.Name)
 	cfg.PbftKeyStore = ctx.GlobalString(PbftKeyStore.Name)
@@ -1640,7 +1640,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		}
 		cfg.Genesis = core.DefaultTestnetGenesisBlock()
 		if !ctx.GlobalIsSet(DataDirFlag.Name) {
-			cfg.EvilSignersJournalDir = filepath.Join(node.DefaultDataDir(), "testnet", "geth")
+			cfg.EvilSignersJournalDir = filepath.Join(node.DefaultDataDir(), "testnet", "pgp")
 		}
 		//if !ctx.GlobalIsSet(FrozenAccount.Name) {
 		//	ctx.GlobalSet(FrozenAccount.Name, "0x6527946c8b26cc203f9674a5e1d8178beeed70c1")
@@ -1651,7 +1651,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		}
 		cfg.Genesis = core.DefaultRinkebyGenesisBlock()
 		if !ctx.GlobalIsSet(DataDirFlag.Name) {
-			cfg.EvilSignersJournalDir = filepath.Join(node.DefaultDataDir(), "rinkeby", "geth")
+			cfg.EvilSignersJournalDir = filepath.Join(node.DefaultDataDir(), "rinkeby", "pgp")
 		}
 	case ctx.GlobalBool(GoerliFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
@@ -1659,7 +1659,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		}
 		cfg.Genesis = core.DefaultGoerliGenesisBlock()
 		if !ctx.GlobalIsSet(DataDirFlag.Name) {
-			cfg.EvilSignersJournalDir = filepath.Join(node.DefaultDataDir(), "goerli", "geth")
+			cfg.EvilSignersJournalDir = filepath.Join(node.DefaultDataDir(), "goerli", "pgp")
 		}
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
@@ -1798,7 +1798,7 @@ func SetupMetrics(ctx *cli.Context) {
 
 			log.Info("Enabling metrics export to InfluxDB")
 
-			go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "geth.", tagsMap)
+			go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "pgp.", tagsMap)
 		}
 	}
 }
@@ -1923,11 +1923,11 @@ func MakeConsolePreloads(ctx *cli.Context) []string {
 // This is a temporary function used for migrating old command/flags to the
 // new format.
 //
-// e.g. geth account new --keystore /tmp/mykeystore --lightkdf
+// e.g. pgp account new --keystore /tmp/mykeystore --lightkdf
 //
 // is equivalent after calling this method with:
 //
-// geth --keystore /tmp/mykeystore --lightkdf account new
+// pgp --keystore /tmp/mykeystore --lightkdf account new
 //
 // This allows the use of the existing configuration functionality.
 // When all flags are migrated this function can be removed and the existing

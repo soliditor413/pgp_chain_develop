@@ -687,7 +687,7 @@ func (c *ChainConfig) CheckCompatible(newcfg *ChainConfig, height uint64) *Confi
 	return lasterr
 }
 
-// CheckConfigForkOrder checks that we don't "skip" any forks, geth isn't pluggable enough
+// CheckConfigForkOrder checks that we don't "skip" any forks, pgp isn't pluggable enough
 // to guarantee that forks
 func (c *ChainConfig) CheckConfigForkOrder() error {
 	type fork struct {

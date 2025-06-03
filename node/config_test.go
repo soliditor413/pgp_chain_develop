@@ -85,14 +85,14 @@ func TestIPCPathResolution(t *testing.T) {
 	}{
 		{"", "", false, ""},
 		{"data", "", false, ""},
-		{"", "geth.ipc", false, filepath.Join(os.TempDir(), "geth.ipc")},
-		{"data", "geth.ipc", false, "data/geth.ipc"},
-		{"data", "./geth.ipc", false, "./geth.ipc"},
-		{"data", "/geth.ipc", false, "/geth.ipc"},
+		{"", "pgp.ipc", false, filepath.Join(os.TempDir(), "pgp.ipc")},
+		{"data", "pgp.ipc", false, "data/pgp.ipc"},
+		{"data", "./pgp.ipc", false, "./pgp.ipc"},
+		{"data", "/pgp.ipc", false, "/pgp.ipc"},
 		{"", "", true, ``},
 		{"data", "", true, ``},
-		{"", "geth.ipc", true, `\\.\pipe\geth.ipc`},
-		{"data", "geth.ipc", true, `\\.\pipe\geth.ipc`},
+		{"", "pgp.ipc", true, `\\.\pipe\geth.ipc`},
+		{"data", "pgp.ipc", true, `\\.\pipe\geth.ipc`},
 		{"data", `\\.\pipe\geth.ipc`, true, `\\.\pipe\geth.ipc`},
 	}
 	for i, test := range tests {
