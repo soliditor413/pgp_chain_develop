@@ -163,6 +163,7 @@ var PrecompiledContractsShangHai = map[common.Address]PrecompiledContract{
 	common.BytesToAddress(params.PledgeBillTokenVersion.Bytes()):    &pledgeBillPayloadVersion{},
 	common.BytesToAddress(params.GetMainChainBlockByHeight.Bytes()): &getMainChainBlockByHeight{},
 	common.BytesToAddress(params.GetMainChainLatestHeight.Bytes()):  &getMainChainLatestHeight{},
+	common.BytesToAddress(params.GetMainChainRechargeData.Bytes()):  &getMainChainRechargeData{},
 }
 
 var (
@@ -1480,4 +1481,98 @@ func (h *getMainChainLatestHeight) Run(input []byte) ([]byte, error) {
 		return ret, err
 	}
 	return ret, nil
+}
+
+type getMainChainRechargeData struct{}
+
+func (c *getMainChainRechargeData) RequiredGas(input []byte) uint64 {
+	return 0
+}
+
+func (c *getMainChainRechargeData) Run(input []byte) ([]byte, error) {
+	elaHash := getData(input, 32, 32)
+	hash := common.BytesToHash(elaHash).String()
+	datas, _, err := spv.GetRechargeDataByTxhash(hash)
+	if err != nil {
+		log.Error("GetRechargeDataByTxhash failed", "error", err)
+		return []byte{}, err
+	}
+	// Encode the RechargeDatas array to ABI-encoded bytes
+	// The structure in Solidity would be:
+	// struct RechargeData {
+	//     address targetAddress;
+	//     uint256 targetAmount;
+	//     uint256 fee;
+	//     bytes targetData;
+	// }
+
+	// Create arguments for ABI encoding
+	var arguments abi.Arguments
+	{
+		// Encode array length first
+		arrayLen := abi.Argument{
+			Type: mustNewType("uint256"),
+		}
+		arguments = append(arguments, arrayLen)
+
+		// Then encode each element in the array
+		for i := 0; i < len(datas); i++ {
+			// targetAddress (address)
+			targetAddrArg := abi.Argument{
+				Name: "targetAddress",
+				Type: mustNewType("address"),
+			}
+			arguments = append(arguments, targetAddrArg)
+
+			// targetAmount (uint256)
+			targetAmountArg := abi.Argument{
+				Name: "targetAmount",
+				Type: mustNewType("uint256"),
+			}
+			arguments = append(arguments, targetAmountArg)
+
+			// fee (uint256)
+			feeArg := abi.Argument{
+				Name: "fee",
+				Type: mustNewType("uint256"),
+			}
+			arguments = append(arguments, feeArg)
+
+			// targetData (bytes)
+			targetDataArg := abi.Argument{
+				Name: "targetData",
+				Type: mustNewType("bytes"),
+			}
+			arguments = append(arguments, targetDataArg)
+		}
+	}
+
+	// Prepare values for encoding
+	values := make([]interface{}, 1+len(datas)*4) // 1 for array length + 4 fields per element
+	values[0] = big.NewInt(int64(len(datas)))     // Array length
+
+	for i, data := range datas {
+		offset := 1 + i*4
+		values[offset] = data.TargetAddress  // targetAddress
+		values[offset+1] = data.TargetAmount // targetAmount
+		values[offset+2] = data.Fee          // fee
+		values[offset+3] = data.TargetData   // targetData
+	}
+
+	// Pack the data
+	packed, err := arguments.Pack(values...)
+	if err != nil {
+		log.Error("Failed to pack recharge data", "error", err)
+		return []byte{}, err
+	}
+	return packed, nil
+}
+
+// Helper function to create a new type from string
+func mustNewType(typ string) abi.Type {
+	t, err := abi.NewType(typ, typ, nil)
+	if err != nil {
+		panic(fmt.Sprintf("failed to create type: %v", err))
+	}
+	return t
 }

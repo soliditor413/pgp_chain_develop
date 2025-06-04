@@ -191,6 +191,7 @@ var (
 	PledgeBillTokenVersion    = big.NewInt(1006)
 	GetMainChainBlockByHeight = big.NewInt(1007)
 	GetMainChainLatestHeight  = big.NewInt(1008)
+	GetMainChainRechargeData  = big.NewInt(1009)
 )
 
 var (
