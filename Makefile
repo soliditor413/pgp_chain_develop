@@ -14,7 +14,7 @@ GO ?= latest
 pgp:
 	build/env.sh go run build/ci.go install ./cmd/pgp
 	@echo "Done building."
-	@echo "Run \"$(GOBIN)/geth\" to launch geth."
+	@echo "Run \"$(GOBIN)/pgp\" to launch pgp."
 
 bootnode:
 	build/env.sh go run build/ci.go install ./cmd/bootnode
@@ -25,12 +25,12 @@ all:
 android:
 	build/env.sh go run build/ci.go aar --local
 	@echo "Done building."
-	@echo "Import \"$(GOBIN)/geth.aar\" to use the library."
+	@echo "Import \"$(GOBIN)/pgp.aar\" to use the library."
 
 ios:
 	build/env.sh go run build/ci.go xcode --local
 	@echo "Done building."
-	@echo "Import \"$(GOBIN)/Geth.framework\" to use the library."
+	@echo "Import \"$(GOBIN)/pgp.framework\" to use the library."
 
 test: all
 	build/env.sh go run build/ci.go test

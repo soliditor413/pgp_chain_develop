@@ -378,8 +378,12 @@ func DefaultGenesisBlock() *Genesis {
 	extra = append(extra, bytes.Repeat([]byte{0x00}, 65)...)
 	genesis.ExtraData = extra
 	genesis.Alloc = GenesisAlloc{
-		params.WithdrawalContractAddress: {
-			Code:    params.WithdrawalContractCode,
+		params.ELAMINTER: {
+			Code:    params.ELAMINTER_CODE,
+			Balance: big.NewInt(0),
+		},
+		params.ELATOKEN: {
+			Code:    params.ELATOKEN_CODE,
 			Balance: big.NewInt(0),
 		},
 	}
@@ -424,8 +428,12 @@ func DefaultTestnetGenesisBlock() *Genesis {
 	extra = append(extra, bytes.Repeat([]byte{0x00}, 65)...)
 	genesis.ExtraData = extra
 	genesis.Alloc = GenesisAlloc{
-		params.WithdrawalContractAddress: {
-			Code:    params.WithdrawalContractCode,
+		params.ELAMINTER: {
+			Code:    params.ELAMINTER_CODE,
+			Balance: big.NewInt(0),
+		},
+		params.ELATOKEN: {
+			Code:    params.ELATOKEN_CODE,
 			Balance: big.NewInt(0),
 		},
 	}
@@ -471,8 +479,12 @@ func DefaultRinkebyGenesisBlock() *Genesis {
 	extra = append(extra, bytes.Repeat([]byte{0x00}, 65)...)
 	genesis.ExtraData = extra
 	genesis.Alloc = GenesisAlloc{
-		params.WithdrawalContractAddress: {
-			Code:    params.WithdrawalContractCode,
+		params.ELAMINTER: {
+			Code:    params.ELAMINTER_CODE,
+			Balance: big.NewInt(0),
+		},
+		params.ELATOKEN: {
+			Code:    params.ELATOKEN_CODE,
 			Balance: big.NewInt(0),
 		},
 	}
