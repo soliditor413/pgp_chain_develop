@@ -31,13 +31,11 @@ import (
 	"github.com/pgprotocol/pgp-chain/core/state"
 	"github.com/pgprotocol/pgp-chain/core/types"
 	"github.com/pgprotocol/pgp-chain/crosschain"
-	"github.com/pgprotocol/pgp-chain/crypto"
 	"github.com/pgprotocol/pgp-chain/event"
 	"github.com/pgprotocol/pgp-chain/log"
 	"github.com/pgprotocol/pgp-chain/metrics"
 	"github.com/pgprotocol/pgp-chain/params"
 	"github.com/pgprotocol/pgp-chain/spv"
-	"github.com/pgprotocol/pgp-chain/withdrawfailedtx"
 )
 
 const (
@@ -561,39 +559,48 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrNonceTooLow
 	}
 
-	if tx.To() != nil {
-		to := *tx.To()
-		var addr common.Address
-		if len(tx.Data()) != 32 || to != addr {
-			// Transactor should have enough funds to cover the costs
-			// cost == V + GP * GL
-			isWithdrawRefund := false
-			isSmallCrossTx := false
-			if to == addr {
-				isWithdrawRefund, _ = withdrawfailedtx.IsWithdawFailedTx(tx.Data(), pool.chainconfig.BlackContractAddr)
-				if !isWithdrawRefund && len(tx.Data()) > 32 {
-					rawTxID, _, _, _ := spv.IsSmallCrossTxByData(tx.Data())
-					isSmallCrossTx = rawTxID != ""
-				}
-			}
-			if !isWithdrawRefund && !isSmallCrossTx {
-				if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
-					return ErrInsufficientFunds
-				}
-			}
-		}
-		if to.String() == pool.chainconfig.BlackContractAddr && spv.MainChainIsPowMode() {
-			log.Error("[validateTx]", "error", ErrMainChainInPowMode.Error())
-			return ErrMainChainInPowMode
-		}
-
-	} else {
-		contractAddr := crypto.CreateAddress(from, pool.currentState.GetNonce(from))
-		if contractAddr.String() != pool.chainconfig.BlackContractAddr {
-			if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
-				return ErrInsufficientFunds
-			}
-		}
+	//if tx.To() != nil {
+	//	to := *tx.To()
+	//	var addr common.Address
+	//	if len(tx.Data()) != 32 || to != addr {
+	//		// Transactor should have enough funds to cover the costs
+	//		// cost == V + GP * GL
+	//		isWithdrawRefund := false
+	//		isSmallCrossTx := false
+	//		if to == addr {
+	//			isWithdrawRefund, _ = withdrawfailedtx.IsWithdawFailedTx(tx.Data(), pool.chainconfig.BlackContractAddr)
+	//			if !isWithdrawRefund && len(tx.Data()) > 32 {
+	//				rawTxID, _, _, _ := spv.IsSmallCrossTxByData(tx.Data())
+	//				isSmallCrossTx = rawTxID != ""
+	//			}
+	//		}
+	//		if !isWithdrawRefund && !isSmallCrossTx {
+	//			if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
+	//				return ErrInsufficientFunds
+	//			}
+	//		}
+	//	}
+	//	if to.String() == pool.chainconfig.BlackContractAddr && spv.MainChainIsPowMode() {
+	//		log.Error("[validateTx]", "error", ErrMainChainInPowMode.Error())
+	//		return ErrMainChainInPowMode
+	//	}
+	//
+	//} else {
+	//	contractAddr := crypto.CreateAddress(from, pool.currentState.GetNonce(from))
+	//	if contractAddr.String() != pool.chainconfig.BlackContractAddr {
+	//		if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
+	//			return ErrInsufficientFunds
+	//		}
+	//	}
+	//}
+	// Transactor should have enough funds to cover the costs
+	// cost == V + GP * GL
+	if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
+		return ErrInsufficientFunds
+	}
+	if spv.IsWithdrawTx(tx.Data(), tx.To()) && spv.MainChainIsPowMode() {
+		log.Error("[validateTx]", "error", ErrMainChainInPowMode.Error())
+		return ErrMainChainInPowMode
 	}
 
 	// Ensure the transaction has more gas than the basic tx fee.

@@ -17,10 +17,7 @@
 package core
 
 import (
-	"math/big"
-
 	"github.com/pgprotocol/pgp-chain/common"
-	"github.com/pgprotocol/pgp-chain/common/hexutil"
 	"github.com/pgprotocol/pgp-chain/consensus"
 	"github.com/pgprotocol/pgp-chain/consensus/misc"
 	"github.com/pgprotocol/pgp-chain/core/state"
@@ -28,8 +25,6 @@ import (
 	"github.com/pgprotocol/pgp-chain/core/vm"
 	"github.com/pgprotocol/pgp-chain/crypto"
 	"github.com/pgprotocol/pgp-chain/params"
-	"github.com/pgprotocol/pgp-chain/spv"
-	"github.com/pgprotocol/pgp-chain/withdrawfailedtx"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -114,30 +109,30 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 		return nil, err
 	}
 
-	if tx.To() != nil {
-		to := *tx.To()
-		var blackAddr common.Address
-		if to == blackAddr {
-			iswithdraw, txHash := withdrawfailedtx.IsWithdawFailedTx(tx.Data(), config.BlackContractAddr)
-			if iswithdraw {
-				statedb.SetState(blackAddr, common.HexToHash(txHash), tx.Hash())
-				statedb.SetNonce(blackAddr, statedb.GetNonce(blackAddr)+1)
-			} else if len(tx.Data()) == 32 {
-				txHash = hexutil.Encode(tx.Data())
-				fee, addr, output := spv.FindOutputFeeAndaddressByTxHash(txHash)
-				if fee.Cmp(new(big.Int)) > 0 && output.Cmp(new(big.Int)) > 0 && addr != blackAddr {
-					statedb.SetState(blackAddr, common.HexToHash(txHash), tx.Hash())
-					statedb.SetNonce(blackAddr, statedb.GetNonce(blackAddr)+1)
-				}
-			} else {
-				txHash, _, _, _ = spv.IsSmallCrossTxByData(tx.Data())
-				if txHash != "" {
-					statedb.SetState(blackAddr, common.HexToHash(txHash), tx.Hash())
-					statedb.SetNonce(blackAddr, statedb.GetNonce(blackAddr)+1)
-				}
-			}
-		}
-	}
+	//if tx.To() != nil {
+	//to := *tx.To()
+	//var blackAddr common.Address
+	//if to == blackAddr {
+	//	iswithdraw, txHash := withdrawfailedtx.IsWithdawFailedTx(tx.Data(), config.BlackContractAddr)
+	//	if iswithdraw {
+	//		statedb.SetState(blackAddr, common.HexToHash(txHash), tx.Hash())
+	//		statedb.SetNonce(blackAddr, statedb.GetNonce(blackAddr)+1)
+	//	} else if len(tx.Data()) == 32 {
+	//		txHash = hexutil.Encode(tx.Data())
+	//		fee, addr, output := spv.FindOutputFeeAndaddressByTxHash(txHash)
+	//		if fee.Cmp(new(big.Int)) > 0 && output.Cmp(new(big.Int)) > 0 && addr != blackAddr {
+	//			statedb.SetState(blackAddr, common.HexToHash(txHash), tx.Hash())
+	//			statedb.SetNonce(blackAddr, statedb.GetNonce(blackAddr)+1)
+	//		}
+	//	} else {
+	//		txHash, _, _, _ = spv.IsSmallCrossTxByData(tx.Data())
+	//		if txHash != "" {
+	//			statedb.SetState(blackAddr, common.HexToHash(txHash), tx.Hash())
+	//			statedb.SetNonce(blackAddr, statedb.GetNonce(blackAddr)+1)
+	//		}
+	//	}
+	//}
+	//}
 	// Update the state with pending changes
 	var root []byte
 	if config.IsByzantium(header.Number) {

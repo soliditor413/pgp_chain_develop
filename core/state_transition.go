@@ -26,7 +26,6 @@ import (
 
 	"github.com/pgprotocol/pgp-chain/chainbridge_abi"
 	"github.com/pgprotocol/pgp-chain/common"
-	"github.com/pgprotocol/pgp-chain/common/hexutil"
 	"github.com/pgprotocol/pgp-chain/core/types"
 	"github.com/pgprotocol/pgp-chain/core/vm"
 	"github.com/pgprotocol/pgp-chain/crypto"
@@ -133,10 +132,10 @@ func IntrinsicGas(data []byte, contractCreation, isEIP155 bool, isEIP2028 bool) 
 	} else {
 		gas = params.TxGas
 	}
-	rawTxid, _, _, _ := spv.IsSmallCrossTxByData(data)
-	if rawTxid != "" {
-		return gas, nil
-	}
+	//rawTxid, _, _, _ := spv.IsSmallCrossTxByData(data)
+	//if rawTxid != "" {
+	//	return gas, nil
+	//}
 	// Bump the required gas by the amount of transactional data
 	if len(data) > 0 {
 		// Zero and non-zero bytes are priced differently
@@ -256,7 +255,6 @@ func (st *StateTransition) TransitionDb() (result *ExecutionResult, err error) {
 	contractCreation := msg.To() == nil
 	isRefundWithdrawTx := false
 	var recharges spv.RechargeDatas
-	var totalFee *big.Int
 
 	//recharge tx and widthdraw refund
 	if msg.To() != nil && *msg.To() == blackaddr {
@@ -299,74 +297,6 @@ func (st *StateTransition) TransitionDb() (result *ExecutionResult, err error) {
 			}
 			isRefundWithdrawTx = true
 		} else {
-			isSmallRechargeTx := false
-			verified := false
-			rawTxID := ""
-			if len(msg.Data()) > 32 {
-				isSmallRechargeTx, verified, rawTxID, err = st.dealSmallCrossTx()
-				if err != nil && isSmallRechargeTx {
-					log.Warn("TransitionDb dealSmallCrossTx >>", "isSmallRechargeTx", isSmallRechargeTx, "verified", verified, "rawTxID", rawTxID, "err", err)
-					return &ExecutionResult{0, nil, nil}, err
-				}
-				if isSmallRechargeTx && verified == false {
-					log.Warn("TransitionDb dealSmallCrossTx >>", "isSmallRechargeTx", isSmallRechargeTx, "verified", verified, "rawTxID", rawTxID, "err", err)
-					return &ExecutionResult{0, nil, nil}, ErrSmallCrossTxVerify
-				}
-				txhash = rawTxID
-			}
-			if len(msg.Data()) == 32 {
-				txhash = hexutil.Encode(msg.Data())
-			}
-			if len(msg.Data()) == 32 || isSmallRechargeTx {
-				recharges, totalFee, err = spv.GetRechargeDataByTxhash(txhash)
-				if err != nil || len(recharges) <= 0 {
-					log.Error("recharge data error", "error", err)
-					return &ExecutionResult{0, nil, nil}, ErrElaToEthAddress
-				}
-				completetxhash := evm.StateDB.GetState(blackaddr, common.HexToHash(txhash))
-				if completetxhash != emptyHash {
-					return &ExecutionResult{0, nil, nil}, ErrMainTxHashPresence
-				}
-				for _, recharge := range recharges {
-					if recharge.TargetAddress == blackaddr || recharge.TargetAmount.Cmp(recharge.Fee) < 0 {
-						log.Error("recharge data error ", "fee", recharge.Fee.String(), "TargetAddress", recharge.TargetAddress.String(), "TargetAmount", recharge.TargetAmount.String(), "isSmallRechargeTx", isSmallRechargeTx)
-						return &ExecutionResult{0, nil, nil}, ErrElaToEthAddress
-					}
-				}
-
-				st.state.AddBalance(st.msg.From(), new(big.Int).SetUint64(evm.ChainConfig().PassBalance))
-				defer func() {
-					ethfee := new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice)
-					for _, recharge := range recharges {
-						if recharge.Fee.Cmp(new(big.Int)) <= 0 || st.state.GetBalance(recharge.TargetAddress).Uint64() < 0 {
-							ret = nil
-							result.UsedGas = 0
-							result.Err = nil
-							result.ReturnData = ret
-							if err == nil {
-								log.Error("ErrGasLimitReached 1111", "totalFee", totalFee.String(), "ethFee", ethfee.String(), " st.state.GetBalance(recharge.TargetAddress).Uint64()", st.state.GetBalance(recharge.TargetAddress).Uint64(), "targetAddress", recharge.TargetAddress)
-								err = ErrGasLimitReached
-							}
-							evm.StateDB.RevertToSnapshot(snapshot)
-							return
-						}
-					}
-					st.state.AddBalance(st.msg.From(), totalFee)
-					if st.state.GetBalance(st.msg.From()).Cmp(new(big.Int).SetUint64(evm.ChainConfig().PassBalance)) < 0 || totalFee.Cmp(ethfee) < 0 {
-						ret = nil
-						result.UsedGas = 0
-						result.Err = nil
-						result.ReturnData = ret
-						if err == nil {
-							log.Error("ErrGasLimitReached 22222", "totalFee", totalFee.String(), "ethFee", ethfee.String(), " st.state.GetBalance(st.msg.From())", st.state.GetBalance(st.msg.From()))
-							err = ErrGasLimitReached
-						}
-						evm.StateDB.RevertToSnapshot(snapshot)
-					} else {
-						st.state.SubBalance(st.msg.From(), new(big.Int).SetUint64(evm.ChainConfig().PassBalance))
-					}
-				}()
-			}
 		}
 	} else if contractCreation { //deploy contract
 		blackcontract = crypto.CreateAddress(sender.Address(), evm.StateDB.GetNonce(sender.Address()))
