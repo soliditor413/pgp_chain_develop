@@ -192,6 +192,7 @@ var (
 	GetMainChainBlockByHeight = big.NewInt(1007)
 	GetMainChainLatestHeight  = big.NewInt(1008)
 	GetMainChainRechargeData  = big.NewInt(1009)
+	GetWithdrawData           = big.NewInt(1010)
 )
 
 var (

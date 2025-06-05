@@ -391,7 +391,7 @@ func (st *StateTransition) TransitionDb() (result *ExecutionResult, err error) {
 	//	}
 	//	IsBridgeContract = ok
 	//}
-	if spv.IsRechargeTx(msg.Data(), *msg.To()) && vmerr == nil {
+	if spv.IsRechargeTx(msg.Data(), msg.To()) && vmerr == nil {
 		st.refundCostGas()
 	} else {
 		st.refundGas()

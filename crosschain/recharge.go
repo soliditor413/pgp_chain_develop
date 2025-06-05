@@ -20,5 +20,5 @@ func IsRechargeTx(tx *types.Transaction) bool {
 	//	}
 	//}
 	//return false
-	return spv.IsRechargeTx(tx.Data(), *tx.To())
+	return spv.IsRechargeTx(tx.Data(), tx.To())
 }

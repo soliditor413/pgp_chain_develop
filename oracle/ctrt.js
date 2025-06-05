@@ -69,19 +69,6 @@ module.exports = {
       "type": "event"
     },
     {
-      "inputs": [],
-      "name": "ELACoin",
-      "outputs": [
-        {
-          "internalType": "contract IELACoin",
-          "name": "",
-          "type": "address"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
       "inputs": [
         {
           "internalType": "bytes32",
@@ -92,6 +79,19 @@ module.exports = {
       "name": "Recharge",
       "outputs": [],
       "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "_ELACoin",
+      "outputs": [
+        {
+          "internalType": "contract IELACoin",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
       "type": "function"
     },
     {
@@ -193,6 +193,43 @@ module.exports = {
         }
       ],
       "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "withdrwTxID",
+          "type": "bytes32"
+        }
+      ],
+      "name": "getWithdrawData",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "withdrwTxID",
+          "type": "bytes32"
+        }
+      ],
+      "name": "refundWithdraw",
+      "outputs": [],
+      "stateMutability": "nonpayable",
       "type": "function"
     },
     {

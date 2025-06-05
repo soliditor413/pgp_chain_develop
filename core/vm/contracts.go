@@ -36,6 +36,7 @@ import (
 	"github.com/pgprotocol/pgp-chain/params"
 	"github.com/pgprotocol/pgp-chain/pledgeBill"
 	"github.com/pgprotocol/pgp-chain/spv"
+	"github.com/pgprotocol/pgp-chain/withdrawfailedtx"
 
 	"github.com/elastos/Elastos.ELA/core/contract"
 	"github.com/elastos/Elastos.ELA/core/contract/program"
@@ -164,6 +165,7 @@ var PrecompiledContractsShangHai = map[common.Address]PrecompiledContract{
 	common.BytesToAddress(params.GetMainChainBlockByHeight.Bytes()): &getMainChainBlockByHeight{},
 	common.BytesToAddress(params.GetMainChainLatestHeight.Bytes()):  &getMainChainLatestHeight{},
 	common.BytesToAddress(params.GetMainChainRechargeData.Bytes()):  &getMainChainRechargeData{},
+	common.BytesToAddress(params.GetWithdrawData.Bytes()):           &getWithdrawData{},
 }
 
 var (
@@ -1575,4 +1577,39 @@ func mustNewType(typ string) abi.Type {
 		panic(fmt.Sprintf("failed to create type: %v", err))
 	}
 	return t
+}
+
+type getWithdrawData struct{}
+
+func (c *getWithdrawData) RequiredGas(input []byte) uint64 {
+	return 0
+}
+
+func (c *getWithdrawData) Run(input []byte) ([]byte, error) {
+	withdrawTxID := getData(input, 32, 32)
+	hash := common.BytesToHash(withdrawTxID).String()
+	_ = hash
+	from, amount, err := withdrawfailedtx.GetVerifiedWithdrawTxValue(hash)
+	if err != nil {
+		return []byte{}, err
+	}
+	var arguments abi.Arguments
+	targetAddrArg := abi.Argument{
+		Name: "targetAddress",
+		Type: mustNewType("address"),
+	}
+	arguments = append(arguments, targetAddrArg)
+
+	amountArg := abi.Argument{
+		Name: "amount",
+		Type: mustNewType("uint256"),
+	}
+	arguments = append(arguments, amountArg)
+
+	packed, err := arguments.Pack(from, amount)
+	if err != nil {
+		return []byte{}, err
+	}
+	fmt.Println(" return packed", common.Bytes2Hex(packed))
+	return packed, nil
 }
