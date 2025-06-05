@@ -967,13 +967,17 @@ func IsPackagedElaTx(elaTx string) (bool, error) {
 	if elaTx[:2] == "0x" {
 		elaTx = elaTx[2:]
 	}
-	ethTx, err := ipcClient.StorageAt(context.Background(), ethCommon.Address{}, ethCommon.HexToHash("0x"+elaTx), nil)
-	if err == nil {
-		h := ethCommon.Hash{}
-		if ethCommon.BytesToHash(ethTx) != h {
-			onElaTxPacked(elaTx)
-			return true, nil
-		}
+	//ethTx, err := ipcClient.StorageAt(context.Background(), ethCommon.Address{}, ethCommon.HexToHash("0x"+elaTx), nil)
+	//if err == nil {
+	//	h := ethCommon.Hash{}
+	//	if ethCommon.BytesToHash(ethTx) != h {
+	//		onElaTxPacked(elaTx)
+	//		return true, nil
+	//	}
+	//}
+	if IsCompleted(elaTx, ipcClient) {
+		onElaTxPacked(elaTx)
+		return true, nil
 	}
 	return false, nil
 }

@@ -74,6 +74,11 @@ for (const event of ctrt.abi) {
 
 const pledgeBillBurnEvent = pledgeBillContract.abi[0]
 
+async function rechargeIsSuccess(elaHash) {
+    const result = await contract.methods.completed(elaHash).call()
+    return result
+}
+
 module.exports = {
     web3: web3,
     contract: contract,
@@ -102,5 +107,6 @@ module.exports = {
             }
         }
         return returnValue
-    }
+    },
+    rechargeIsSuccess: rechargeIsSuccess
 };

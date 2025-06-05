@@ -840,7 +840,11 @@ func (s *PublicBlockChainAPI) SendInvalidWithdrawTransaction(ctx context.Context
 	if tx == nil || err != nil {
 		return errors.New(fmt.Sprintf("not found withdraw tx, txid:%s", txid.String()))
 	}
-	if tx.To().String() != s.b.ChainConfig().BlackContractAddr {
+	//if tx.To().String() != s.b.ChainConfig().BlackContractAddr {
+	//	msg := fmt.Sprintf("is not withdraw tx, txid:%s", hash)
+	//	return errors.New(msg)
+	//}
+	if spv.IsWithdrawTx(tx.Data(), tx.To()) == false {
 		msg := fmt.Sprintf("is not withdraw tx, txid:%s", hash)
 		return errors.New(msg)
 	}

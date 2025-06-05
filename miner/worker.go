@@ -26,7 +26,6 @@ import (
 
 	mapset "github.com/deckarep/golang-set"
 	"github.com/pgprotocol/pgp-chain/common"
-	"github.com/pgprotocol/pgp-chain/common/hexutil"
 	"github.com/pgprotocol/pgp-chain/consensus"
 	"github.com/pgprotocol/pgp-chain/consensus/clique"
 	"github.com/pgprotocol/pgp-chain/consensus/misc"
@@ -39,7 +38,6 @@ import (
 	"github.com/pgprotocol/pgp-chain/event"
 	"github.com/pgprotocol/pgp-chain/log"
 	"github.com/pgprotocol/pgp-chain/params"
-	"github.com/pgprotocol/pgp-chain/spv"
 )
 
 const (
@@ -790,6 +788,7 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 				core.RemoveLocalTx(w.eth.TxPool(), tx.Hash(), true, false)
 			}
 		case core.ErrMainTxHashPresence:
+		case core.ErrMainTxHashCompleted:
 			log.Info("ErrMainTxHashPresence  is returned if Main chain transaction has been processed", "sender", from)
 			txs.Pop()
 			if crosschain.IsRechargeTx(tx) {
@@ -824,26 +823,6 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 			// nonce-too-high clause will prevent us from executing in vain).
 			log.Error("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
 			txs.Shift()
-			if tx.To() != nil {
-				var addr common.Address
-				if crosschain.IsRechargeTx(tx) {
-					core.RemoveLocalTx(w.eth.TxPool(), tx.Hash(), true, false)
-					txhash := ""
-					if len(tx.Data()) == 32 {
-						txhash = hexutil.Encode(tx.Data())
-					} else if len(tx.Data()) > 32 {
-						log.Error("small cross chain run error", "error", err)
-						txhash, _, _, _ = spv.IsSmallCrossTxByData(tx.Data())
-					}
-					if txhash != "" {
-						_, addr, _ = spv.FindOutputFeeAndaddressByTxHash(txhash)
-						var blackAddr common.Address
-						if addr != blackAddr {
-							spv.OnTx2Failed(txhash)
-						}
-					}
-				}
-			}
 		}
 	}
 

@@ -6,7 +6,7 @@ const child_process = require("child_process");
 module.exports = async function (json_data, res) {
     try {
         let signature = json_data["params"]["signature"];
-        let failedTx = json_data["params"]["txHash"];
+        let failedTx = json_data["params"]["txHash"];//failed withdraw transaction hash in sideChain
         let tx = failedTx;
         if (tx.indexOf("0x") !== 0) {
             tx = "0x" + failedTx;

@@ -37,7 +37,8 @@ var (
 	ErrNoGenesis = errors.New("genesis not found in chain")
 
 	// ErrTxHashTooHigh  is returned if Main chain transaction has been processed
-	ErrMainTxHashPresence = errors.New("main txhash presence")
+	ErrMainTxHashPresence  = errors.New("main txhash presence")
+	ErrMainTxHashCompleted = errors.New("ELAMinter: already completed")
 
 	// ErrElaToEthAddress   is returned if Ethereum address is incorrect
 	ErrElaToEthAddress = errors.New("Ethereum address is incorrect ")

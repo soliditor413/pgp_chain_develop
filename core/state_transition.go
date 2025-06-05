@@ -368,32 +368,31 @@ func (st *StateTransition) TransitionDb() (result *ExecutionResult, err error) {
 		}
 	}
 
-	bridge := evm.ChainConfig().BridgeContractAddr
-	IsBridgeContract := false
-	if bridge != "" {
-		addr := common.HexToAddress(bridge)
-		if addr != blackaddr {
-			codeSize := evm.StateDB.GetCodeSize(addr)
-			IsBridgeContract = codeSize > 0
-		}
-	}
+	//bridge := evm.ChainConfig().BridgeContractAddr
+	//IsBridgeContract := false
+	//if bridge != "" {
+	//	addr := common.HexToAddress(bridge)
+	//	if addr != blackaddr {
+	//		codeSize := evm.StateDB.GetCodeSize(addr)
+	//		IsBridgeContract = codeSize > 0
+	//	}
+	//}
 
-	if IsBridgeContract {
-		ok, errmsg := st.isSetArbiterListMethod()
-		if errmsg != nil {
-			log.Error("isSetArbiterListMethod error", "msg", errmsg)
-		}
-		if !ok {
-			ok, errmsg = st.isSetManualArbiterMethod()
-			if errmsg != nil {
-				log.Error("isSetManualArbiterMethod error", "msg", errmsg)
-			}
-		}
-		IsBridgeContract = ok
-	}
-	if IsBridgeContract && vmerr == nil {
-		log.Info("evm.ChainConfig().BridgeContractAddr", "addr", evm.ChainConfig().BridgeContractAddr, "IsBridgeContract", IsBridgeContract, "vmerr", vmerr)
-		st.refundBridgeGas()
+	//if IsBridgeContract {
+	//	ok, errmsg := st.isSetArbiterListMethod()
+	//	if errmsg != nil {
+	//		log.Error("isSetArbiterListMethod error", "msg", errmsg)
+	//	}
+	//	if !ok {
+	//		ok, errmsg = st.isSetManualArbiterMethod()
+	//		if errmsg != nil {
+	//			log.Error("isSetManualArbiterMethod error", "msg", errmsg)
+	//		}
+	//	}
+	//	IsBridgeContract = ok
+	//}
+	if spv.IsRechargeTx(msg.Data(), *msg.To()) && vmerr == nil {
+		st.refundCostGas()
 	} else {
 		st.refundGas()
 	}
@@ -499,7 +498,7 @@ func (st *StateTransition) refundGas() {
 	st.gp.AddGas(st.gas)
 }
 
-func (st *StateTransition) refundBridgeGas() {
+func (st *StateTransition) refundCostGas() {
 	refund := st.gasUsed()
 	st.gas += refund
 

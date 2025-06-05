@@ -11,8 +11,15 @@ module.exports = async function (json_data, res) {
         let mctxhash = json_data["params"]["txid"];
         if (mctxhash.indexOf("0x") !== 0) mctxhash = "0x" + mctxhash;
         console.log(mctxhash);
-        let txprocessed = await common.web3.eth.getStorageAt(common.blackAdr, mctxhash, common.latest)
-        if (txprocessed != common.zeroHash64) {
+        // let txprocessed = await common.web3.eth.getStorageAt(common.blackAdr, mctxhash, common.latest)
+        // if (txprocessed != common.zeroHash64) {
+        //     console.log("Mainchain Trasaction Hash already processed: " + txprocessed);
+        //     console.log("============================================================");
+        //     common.reterr(SCErrMainchainTxDuplicate, res);
+        //     return;
+        // }
+        let txprocessed = await common.rechargeIsSuccess(mctxhash);
+        if (txprocessed) {
             console.log("Mainchain Trasaction Hash already processed: " + txprocessed);
             console.log("============================================================");
             common.reterr(SCErrMainchainTxDuplicate, res);

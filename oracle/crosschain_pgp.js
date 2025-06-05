@@ -75,7 +75,7 @@ app.post("/", async function(req, res) {
             return;
         }
         if (json_data["method"] === "getprocessedinvalidwithdrawtransactions") {
-            await  ProcessedFailedWithdrawTxs(json_data, res)
+            await ProcessedFailedWithdrawTxs(json_data, res)
             return;
         }
         if (json_data["method"] === "getPledgeBillBurnTransactionByHeight") {
