@@ -11,11 +11,6 @@ module.exports = async function(json_data, res) {
         let extxs = new Array();
         for (let tx of txs) {
             if (tx.indexOf("0x") !== 0) tx = "0x" + tx;
-            // let txprocessed = await common.web3.eth.getStorageAt(common.blackAdr, tx, common.latest)
-            // if (txprocessed != common.zeroHash64) {
-            //     extxs.push(tx);
-            //     continue;
-            // }
             const completed = await common.rechargeIsSuccess(tx);
             if (completed) {
                 extxs.push(tx);

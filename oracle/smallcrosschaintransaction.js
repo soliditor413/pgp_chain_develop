@@ -11,14 +11,7 @@ module.exports = async function (json_data, res) {
         let rawTx = json_data["params"]["rawTx"]
         let mctxhash = json_data["params"]["txHash"];//mainchain transaction hash
         if (mctxhash.indexOf("0x") !== 0) mctxhash = "0x" + mctxhash;
-
-        // let txprocessed = await common.web3.eth.getStorageAt(common.blackAdr, mctxhash, common.latest)
-        // if (txprocessed != common.zeroHash64) {
-        //     console.log("allready accept txid", mctxhash)
-        //     common.web3.onSmallCrossTxSuccess(mctxhash)
-        //     res.json({"error": null, "id": null, "jsonrpc": "2.0", "result": true});
-        //     return;
-        // }
+        
         const completed = await common.rechargeIsSuccess(mctxhash);
         if (completed) {
             console.log("allready accept txid", mctxhash)

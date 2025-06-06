@@ -1588,8 +1588,7 @@ func (c *getWithdrawData) RequiredGas(input []byte) uint64 {
 func (c *getWithdrawData) Run(input []byte) ([]byte, error) {
 	withdrawTxID := getData(input, 32, 32)
 	hash := common.BytesToHash(withdrawTxID).String()
-	_ = hash
-	from, amount, err := withdrawfailedtx.GetVerifiedWithdrawTxValue(hash)
+	from, amount, signatures, err := withdrawfailedtx.GetVerifiedWithdrawTxValue(hash)
 	if err != nil {
 		return []byte{}, err
 	}
@@ -1606,7 +1605,13 @@ func (c *getWithdrawData) Run(input []byte) ([]byte, error) {
 	}
 	arguments = append(arguments, amountArg)
 
-	packed, err := arguments.Pack(from, amount)
+	bytesArg := abi.Argument{
+		Name: "signatures",
+		Type: mustNewType("bytes"),
+	}
+	arguments = append(arguments, bytesArg)
+
+	packed, err := arguments.Pack(from, amount, signatures)
 	if err != nil {
 		return []byte{}, err
 	}

@@ -1,7 +1,6 @@
 package withdrawfailedtx
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -71,12 +70,6 @@ func ReceivedFailedWithdrawTx(hash string, signature string) error {
 		return errors.New("ipc client is null")
 	}
 
-	txhash, err := client.StorageAt(context.Background(), common.Address{}, common.HexToHash(hash), nil)
-	if err != nil {
-		log.Error(fmt.Sprintf("%s get StorageAt: %v", hash, err))
-		return err
-	}
-
 	receipt, err := client.TransactionReceipt(context.Background(), common.HexToHash(hash))
 	if err != nil {
 		return err
@@ -85,10 +78,9 @@ func ReceivedFailedWithdrawTx(hash string, signature string) error {
 		return errors.New("tx receipt status is 0")
 	}
 
-	h := common.Hash{}
-	if common.BytesToHash(txhash) != h {
+	if spv.IsCompleted(hash, client) {
 		OnProcessFaildWithdrawTx(hash)
-		return errors.New("all ready refund this amount" + common.BytesToHash(txhash).String())
+		return errors.New("all ready refund this amount: " + hash)
 	}
 	arbiters, total, err := spv.GetArbiters()
 	if err != nil {
@@ -130,23 +122,11 @@ func SendRefundTx(from common.Address, txid string) error {
 	if client == nil {
 		return errors.New("SendRefundTx client is not init")
 	}
-	failedTxHash := common.HexToHash(txid)
-	result, err := client.StorageAt(context.Background(), common.Address{}, failedTxHash, nil)
-	if err != nil {
-		log.Error(fmt.Sprintf("%s SendRefundTx StorageAt: %v", txid, err))
-		return err
+	if spv.IsCompleted(txid, client) {
+		return errors.New("all ready refund this amount: " + txid)
 	}
-	emptyHash := common.Hash{}
-	ethHash := common.BytesToHash(result)
-	if bytes.Compare(result, emptyHash.Bytes()) != 0 {
-		err = errors.New(fmt.Sprintf("%s submit by: %s", txid, ethHash.String()))
-		return err
-	}
-	data, err := getTxData(failedTxHash)
-	if err != nil {
-		return err
-	}
-	msg := ethereum.CallMsg{From: from, To: &common.Address{}, Data: data}
+	data := spv.GetRefundWithdrawData(txid)
+	msg := ethereum.CallMsg{From: from, To: &spv.ELAMinterAddress, Data: data}
 	gasLimit, err := client.EstimateGas(context.Background(), msg)
 	if err != nil {
 		err = errors.New(fmt.Sprintf("SendRefundTx EstimateGas:%s, %v", txid, err))
@@ -164,7 +144,7 @@ func SendRefundTx(from common.Address, txid string) error {
 	}
 	log.Info("SuggestGasPrice", "value:", gasPrice)
 	if gasPrice.Uint64() == 0 {
-		gasPrice = big.NewInt(1000000000)
+		gasPrice = big.NewInt(2000000000)
 	}
 
 	callmsg := ethereum.TXMsg{From: from, To: &common.Address{}, Data: data, Gas: gasLimit, GasPrice: gasPrice}
@@ -408,17 +388,22 @@ func IsVerifiedWithdrawTx(scTxID string) bool {
 	return false
 }
 
-func GetVerifiedWithdrawTxValue(txid string) (*common.Address, *big.Int, error) {
+func GetVerifiedWithdrawTxValue(txid string) (*common.Address, *big.Int, []byte, error) {
 	if txid[:2] == "0x" {
 		txid = txid[2:]
 	}
 	if !IsVerifiedWithdrawTx(txid) {
-		return nil, nil, errors.New("not have tx:" + txid)
+		return nil, nil, []byte{}, errors.New("not have tx:" + txid)
 	}
 	from, value, err := GetWithdrawTxValue(txid)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, []byte{}, err
 	}
 	fromAddr := common.HexToAddress(from)
-	return &fromAddr, value, nil
+
+	signatures, err := getTxData(common.HexToHash(txid))
+	if err != nil {
+		return nil, nil, []byte{}, err
+	}
+	return &fromAddr, value, signatures, nil
 }

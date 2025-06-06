@@ -63,9 +63,46 @@ module.exports = {
           "internalType": "uint256",
           "name": "amount",
           "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "bytes",
+          "name": "smallRechargeData",
+          "type": "bytes"
         }
       ],
       "name": "Recharged",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "_withdrawTxID",
+          "type": "bytes32"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "_target",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "bytes",
+          "name": "signatures",
+          "type": "bytes"
+        }
+      ],
+      "name": "RefundWithdraw",
       "type": "event"
     },
     {
@@ -74,6 +111,11 @@ module.exports = {
           "internalType": "bytes32",
           "name": "elaHash",
           "type": "bytes32"
+        },
+        {
+          "internalType": "bytes",
+          "name": "smallRechargeData",
+          "type": "bytes"
         }
       ],
       "name": "Recharge",
@@ -214,6 +256,11 @@ module.exports = {
           "internalType": "uint256",
           "name": "",
           "type": "uint256"
+        },
+        {
+          "internalType": "bytes",
+          "name": "",
+          "type": "bytes"
         }
       ],
       "stateMutability": "view",

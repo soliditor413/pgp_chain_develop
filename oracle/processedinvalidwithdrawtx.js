@@ -13,8 +13,8 @@ module.exports = async function (json_data, res) {
             if (tx.indexOf("0x") !== 0) {
                 tx = "0x" + txs[i];
             }
-            let txprocessed = await common.web3.eth.getStorageAt(common.blackAdr, tx, common.latest)
-            if (txprocessed != common.zeroHash64) {
+            const txprocessed = await common.rechargeIsSuccess(tx);
+            if (txprocessed) {
                 list.push(txs[i])
             }
         }

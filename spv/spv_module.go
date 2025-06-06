@@ -751,7 +751,17 @@ func SendTransaction(from ethCommon.Address, elaTx string, fee *big.Int) (err er
 		err = errors.New("is failed tx, can't to send: " + elaTx)
 		return err, true
 	}
-	data := GetRechargeData(elaTx)
+	smallTxData, ctx, err := smallcrosstx.GetSmallCrossTxBytes(elaTx)
+	if err == nil {
+		verified, errmsg := verifySmallCrossTxBySignature(ctx.RawTx, ctx.Signatures, ctx.BlockHeight)
+		if errmsg != nil {
+			return errmsg, false
+		}
+		if !verified {
+			return errors.New("verifySmallCrossTxBySignature failed"), false
+		}
+	}
+	data := GetRechargeData(elaTx, smallTxData)
 	msg := ethereum.CallMsg{From: from, To: &ELAMinterAddress, Data: data}
 	gasLimit, err := ipcClient.EstimateGas(context.Background(), msg)
 	if err != nil {
