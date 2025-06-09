@@ -1,0 +1,12 @@
+package spv
+
+import (
+	"github.com/pgprotocol/pgp-chain/common"
+	"testing"
+)
+
+func TestIsCompletedByTxInput(t *testing.T) {
+	input := "3e44a583c4a3d5dc09808adb4e01fa805f722c3c34f41ca57496c299d17b5e0477b2b05600000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000020c4a3d5dc09808adb4e01fa805f722c3c34f41ca57496c299d17b5e0477b2b056"
+	data := common.Hex2Bytes(input)
+	IsCompletedByTxInput(data)
+}

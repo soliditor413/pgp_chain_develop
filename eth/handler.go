@@ -32,7 +32,6 @@ import (
 	"github.com/pgprotocol/pgp-chain/core"
 	"github.com/pgprotocol/pgp-chain/core/forkid"
 	"github.com/pgprotocol/pgp-chain/core/types"
-	"github.com/pgprotocol/pgp-chain/crosschain"
 	"github.com/pgprotocol/pgp-chain/dpos"
 	"github.com/pgprotocol/pgp-chain/eth/downloader"
 	"github.com/pgprotocol/pgp-chain/eth/fetcher"
@@ -43,6 +42,7 @@ import (
 	"github.com/pgprotocol/pgp-chain/p2p/enode"
 	"github.com/pgprotocol/pgp-chain/params"
 	"github.com/pgprotocol/pgp-chain/rlp"
+	"github.com/pgprotocol/pgp-chain/spv"
 	"github.com/pgprotocol/pgp-chain/trie"
 
 	"github.com/elastos/Elastos.ELA/events"
@@ -806,7 +806,7 @@ func (pm *ProtocolManager) BroadcastTxs(txs types.Transactions) {
 
 	// Broadcast transactions to a batch of peers not knowing about it
 	for _, tx := range txs {
-		if crosschain.IsRechargeTx(tx) {
+		if spv.IsRechargeTx(tx.Data(), tx.To()) {
 			continue
 		}
 		//Because the recharge transaction is the packaging of the current node on duty, there is no need to broadcast

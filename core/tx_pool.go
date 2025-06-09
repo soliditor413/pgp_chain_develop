@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/pgprotocol/pgp-chain/common"
-	"github.com/pgprotocol/pgp-chain/common/hexutil"
 	"github.com/pgprotocol/pgp-chain/common/prque"
 	"github.com/pgprotocol/pgp-chain/core/state"
 	"github.com/pgprotocol/pgp-chain/core/types"
@@ -549,7 +548,6 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 
 	height := pool.chain.CurrentBlock().Number().Uint64()
 	minGasPrice, err := spv.GetMinGasPrice(uint32(height))
-	log.Info(">>>>>>>>>>> spv.GetMinGasPrice", "minGasPrice", minGasPrice, "currentHeight", uint32(height), "error", err)
 	if err == nil && minGasPrice.Cmp(tx.GasPrice()) > 0 {
 		return ErrLowGasPrice
 	}
@@ -593,10 +591,16 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	//		}
 	//	}
 	//}
-	// Transactor should have enough funds to cover the costs
-	// cost == V + GP * GL
-	if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
-		return ErrInsufficientFunds
+	if crosschain.IsSystemTx(tx) {
+		if ok, _ := spv.IsCompletedByTxInput(tx.Data()); ok {
+			return spv.ErrMainTxHashCompleted
+		}
+	} else {
+		// Transactor should have enough funds to cover the costs
+		// cost == V + GP * GL
+		if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
+			return ErrInsufficientFunds
+		}
 	}
 	if spv.IsWithdrawTx(tx.Data(), tx.To()) && spv.MainChainIsPowMode() {
 		log.Error("[validateTx]", "error", ErrMainChainInPowMode.Error())
@@ -893,61 +897,6 @@ func (pool *TxPool) addTxsLocked(txs []*types.Transaction, local bool) ([]error,
 	dirty := newAccountSet(pool.signer)
 	errs := make([]error, len(txs))
 	for i, tx := range txs {
-		if tx.To() != nil {
-			to := *tx.To()
-			var blackAddr common.Address
-			if to == blackAddr {
-				if crosschain.IsRechargeTx(tx) {
-					txhash := ""
-					if len(tx.Data()) == 32 {
-						txhash = hexutil.Encode(tx.Data())
-					} else {
-						txhash, _, _, _ = spv.IsSmallCrossTxByData(tx.Data())
-					}
-					//fee, addr, output := spv.FindOutputFeeAndaddressByTxHash(txhash)
-					recharges, fee, err := spv.GetRechargeDataByTxhash(txhash)
-					if err != nil {
-						errs[i] = err
-					}
-					ethFee := new(big.Int).Mul(new(big.Int).SetUint64(tx.Gas()), tx.GasPrice())
-					completeTxHash := pool.currentState.GetState(blackAddr, common.HexToHash(txhash))
-					if (completeTxHash != common.Hash{}) {
-						errs[i] = ErrMainTxHashPresence
-					}
-					for _, recharge := range recharges {
-						if recharge.TargetAddress != blackAddr {
-							if recharge.Fee.Cmp(new(big.Int)) <= 0 && recharge.TargetAmount.Cmp(new(big.Int)) <= 0 {
-								errs[i] = ErrGasLimitReached
-								break
-							}
-						}
-					}
-					if fee.Cmp(ethFee) < 0 {
-						errs[i] = ErrGasLimitReached
-					}
-					//if addr != blackAddr {
-					//	if fee.Cmp(new(big.Int)) > 0 && output.Cmp(new(big.Int)) > 0 {
-					//		ethFee := new(big.Int).Mul(new(big.Int).SetUint64(tx.Gas()), tx.GasPrice())
-					//		completeTxHash := pool.currentState.GetState(blackAddr, common.HexToHash(txhash))
-					//		if fee.Cmp(ethFee) < 0 {
-					//			errs[i] = ErrGasLimitReached
-					//		} else if (completeTxHash != common.Hash{}) {
-					//			errs[i] = ErrMainTxHashPresence
-					//		}
-					//	} else {
-					//		errs[i] = ErrGasLimitReached
-					//	}
-					//} else {
-					//	errs[i] = ErrElaToEthAddress
-					//}
-				}
-			}
-		}
-
-		if errs[i] != nil {
-			continue
-		}
-
 		replaced, err := pool.add(tx, local)
 		errs[i] = err
 		if err == nil && !replaced {
@@ -1027,7 +976,7 @@ func RemoveLocalTx(pool *TxPool, hash common.Hash, outofbound bool, removetx boo
 	if future := pool.queue[addr]; future != nil {
 		queuetxs := future.Flatten()
 		for _, queue := range queuetxs {
-			if crosschain.IsRechargeTx(queue) {
+			if spv.IsRechargeTx(queue.Data(), queue.To()) {
 				UptxhashIndex(pool, queue)
 				future.Remove(queue)
 			}
@@ -1040,30 +989,15 @@ func RemoveLocalTx(pool *TxPool, hash common.Hash, outofbound bool, removetx boo
 }
 
 func UptxhashIndex(pool *TxPool, tx *types.Transaction) bool {
-	if tx.To() != nil {
-		var blackaddr common.Address
-		if crosschain.IsRechargeTx(tx) {
-			txhash := ""
-			if len(tx.Data()) == 32 {
-				txhash = hexutil.Encode(tx.Data())
-			} else {
-				txhash, _, _, _ = spv.IsSmallCrossTxByData(tx.Data())
-			}
-			completetxhash := pool.currentState.GetState(blackaddr, common.HexToHash(txhash))
-			if (completetxhash == common.Hash{}) {
-				spv.UpTransactionIndex(string(txhash))
-				return true
-			} else {
-				return false
-			}
-
-		} else {
+	if spv.IsRechargeTx(tx.Data(), tx.To()) {
+		completed, elaHash := spv.IsCompletedByTxInput(tx.Data())
+		if completed {
 			return false
 		}
-	} else {
-		return false
+		spv.UpTransactionIndex(elaHash)
+		return true
 	}
-
+	return false
 }
 
 // removeTx removes a single transaction from the queue, moving all subsequent

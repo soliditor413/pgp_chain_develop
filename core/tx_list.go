@@ -107,7 +107,7 @@ func (m *txSortedMap) Filter(filter func(*types.Transaction) bool, gasLimit uint
 	// Collect all the transactions to filter out
 	for nonce, tx := range m.items {
 		if tx.To() != nil { //recharge tx
-			if crosschain.IsRechargeTx(tx) {
+			if crosschain.IsSystemTx(tx) {
 				filter = func(transaction *types.Transaction) bool {
 					return tx.Gas() > gasLimit
 				}

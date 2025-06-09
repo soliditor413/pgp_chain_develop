@@ -87,7 +87,33 @@ func GetRefundWithdrawData(withdrawHash string) []byte {
 	return inputData
 }
 
+func IsCompletedByTxInput(input []byte) (bool, string) {
+	method, exist := ELAMinterABI.Methods["Recharge"]
+	if !exist {
+		return false, ""
+	}
+	if len(input) < 32+len(method.ID) {
+		return false, ""
+	}
+	if bytes.Compare(input[:len(method.ID)], method.ID) != 0 {
+		return false, ""
+	}
+	data := input[len(method.ID):]
+	unPackData, err := method.Inputs.UnpackValues(data)
+	if err != nil {
+		log.Error("IsCompletedByTxInput", "error", err)
+		return false, ""
+	}
+
+	hash := unPackData[0].([32]byte)
+	elaHash := common.Hash(hash).String()
+	return IsCompleted(elaHash, ipcClient), elaHash
+}
+
 func IsCompleted(elaHashOrWithdrawHash string, ipclient *ethclient.Client) bool {
+	if ipclient == nil {
+		return false
+	}
 	hash := common.HexToHash(elaHashOrWithdrawHash)
 	input, err := ELAMinterABI.Pack("completed", hash)
 	if err != nil {

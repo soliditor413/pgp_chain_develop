@@ -38,6 +38,7 @@ import (
 	"github.com/pgprotocol/pgp-chain/event"
 	"github.com/pgprotocol/pgp-chain/log"
 	"github.com/pgprotocol/pgp-chain/params"
+	"github.com/pgprotocol/pgp-chain/spv"
 )
 
 const (
@@ -784,14 +785,14 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 			// Pop the current out-of-gas transaction without shifting in the next from the account
 			log.Error("Gas limit exceeded for current block", "sender", from, "tx", tx.Hash().String())
 			txs.Pop()
-			if crosschain.IsRechargeTx(tx) {
+			if spv.IsRechargeTx(tx.Data(), tx.To()) {
 				core.RemoveLocalTx(w.eth.TxPool(), tx.Hash(), true, false)
 			}
 		case core.ErrMainTxHashPresence:
 		case core.ErrMainTxHashCompleted:
 			log.Info("ErrMainTxHashPresence  is returned if Main chain transaction has been processed", "sender", from)
 			txs.Pop()
-			if crosschain.IsRechargeTx(tx) {
+			if crosschain.IsSystemTx(tx) {
 				core.RemoveLocalTx(w.eth.TxPool(), tx.Hash(), true, true)
 			}
 		case core.ErrSmallCrossTxVerify:
@@ -817,6 +818,9 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 			coalescedLogs = append(coalescedLogs, logs...)
 			w.current.tcount++
 			txs.Shift()
+			if crosschain.IsSystemTx(tx) {
+				core.RemoveLocalTx(w.eth.TxPool(), tx.Hash(), true, true)
+			}
 
 		default:
 			// Strange error, discard the transaction and get the next in line (note, the

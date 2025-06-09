@@ -11,7 +11,6 @@ import (
 	"github.com/pgprotocol/pgp-chain"
 	"github.com/pgprotocol/pgp-chain/accounts/abi"
 	"github.com/pgprotocol/pgp-chain/common"
-	"github.com/pgprotocol/pgp-chain/common/hexutil"
 	"github.com/pgprotocol/pgp-chain/dpos"
 	"github.com/pgprotocol/pgp-chain/event"
 	"github.com/pgprotocol/pgp-chain/log"
@@ -341,26 +340,26 @@ func broadFailedWithdrawEvt(hash, signature string) {
 	go events.Notify(dpos.ETFailedWithdrawTx, &evt)
 }
 
-func IsWithdawFailedTx(input []byte, withdrawAddress string) (bool, string) {
-	if len(input) <= 32 {
-		return false, ""
-	}
-	hashData := input[0:32]
-	txid := hexutil.Encode(hashData)
-	client := spv.GetClient()
-	if client == nil {
-		return false, txid
-	}
-
-	tx, _, err := client.TransactionByHash(context.Background(), common.HexToHash(txid))
-	if err != nil {
-		return false, txid
-	}
-	if tx != nil && tx.To().String() == withdrawAddress {
-		return true, txid
-	}
-	return false, txid
-}
+//func IsWithdawFailedTx(input []byte, withdrawAddress string) (bool, string) {
+//if len(input) <= 32 {
+//	return false, ""
+//}
+//hashData := input[0:32]
+//txid := hexutil.Encode(hashData)
+//client := spv.GetClient()
+//if client == nil {
+//	return false, txid
+//}
+//
+//tx, _, err := client.TransactionByHash(context.Background(), common.HexToHash(txid))
+//if err != nil {
+//	return false, txid
+//}
+//if tx != nil && tx.To().String() == withdrawAddress {
+//	return true, txid
+//}
+//return false, txid
+//}
 
 func getFailedTx(txid string) ([]string, error) {
 	if txid[:2] == "0x" {

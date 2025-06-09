@@ -28,11 +28,9 @@ import (
 	"github.com/pgprotocol/pgp-chain/common"
 	"github.com/pgprotocol/pgp-chain/core/types"
 	"github.com/pgprotocol/pgp-chain/core/vm"
-	"github.com/pgprotocol/pgp-chain/crypto"
 	"github.com/pgprotocol/pgp-chain/log"
 	"github.com/pgprotocol/pgp-chain/params"
 	"github.com/pgprotocol/pgp-chain/spv"
-	"github.com/pgprotocol/pgp-chain/withdrawfailedtx"
 
 	elatx "github.com/elastos/Elastos.ELA/core/transaction"
 )
@@ -242,85 +240,44 @@ func (st *StateTransition) TransitionDb() (result *ExecutionResult, err error) {
 		// vm errors do not effect consensus and are therefor
 		// not assigned to err, except for insufficient balance
 		// error.
-		ret           []byte
-		vmerr         error
-		snapshot      = evm.StateDB.Snapshot()
-		blackaddr     common.Address
-		blackcontract common.Address
-		rules         = st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber, st.evm.Context.Random != nil, st.evm.Context.Time.Uint64())
+		ret      []byte
+		vmerr    error
+		snapshot = evm.StateDB.Snapshot()
+		rules    = st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber, st.evm.Context.Random != nil, st.evm.Context.Time.Uint64())
 	)
 	result = &ExecutionResult{0, nil, nil}
 	msg := st.msg
 	sender := vm.AccountRef(msg.From())
 	contractCreation := msg.To() == nil
-	isRefundWithdrawTx := false
-	var recharges spv.RechargeDatas
-
+	isRefundWithdrawTx := spv.IsRefundWithdrawTx(msg.Data(), msg.To())
+	isRechargeTx := spv.IsRechargeTx(msg.Data(), msg.To())
 	//recharge tx and widthdraw refund
-	if msg.To() != nil && *msg.To() == blackaddr {
-		emptyHash := common.Hash{}
-		isWithdrawTx, txhash := withdrawfailedtx.IsWithdawFailedTx(msg.Data(), evm.ChainConfig().BlackContractAddr)
-		if isWithdrawTx {
-			completetxhash := evm.StateDB.GetState(blackaddr, common.HexToHash(txhash))
-			if completetxhash != emptyHash {
-				return &ExecutionResult{0, nil, nil}, ErrRefunded
-			} else {
-				st.state.AddBalance(st.msg.From(), new(big.Int).SetUint64(evm.ChainConfig().PassBalance))
-				defer func() {
-					usedFee := new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice)
-					nowBalance := st.state.GetBalance(msg.From())
-					if nowBalance.Cmp(usedFee) < 0 || vmerr != nil {
-						ret = nil
-						result.UsedGas = 0
-						result.ReturnData = ret
-						if err == nil {
-							log.Error("fee is not enough ：", "nowBalance", nowBalance.String(), "need", usedFee.String(), "vmerr", vmerr)
-							err = ErrGasLimitReached
-						}
-						result.Err = err
-						evm.StateDB.RevertToSnapshot(snapshot)
-						return
-					}
-					if nowBalance.Cmp(new(big.Int).SetUint64(evm.ChainConfig().PassBalance)) < 0 {
-						ret = nil
-						result.UsedGas = 0
-						result.Err = nil
-						result.ReturnData = ret
-						if err == nil {
-							err = ErrGasLimitReached
-						}
-						evm.StateDB.RevertToSnapshot(snapshot)
-					} else {
-						st.state.SubBalance(st.msg.From(), new(big.Int).SetUint64(evm.ChainConfig().PassBalance))
-					}
-				}()
+	if isRechargeTx || isRefundWithdrawTx {
+		completed, _ := spv.IsCompletedByTxInput(msg.Data())
+		if completed {
+			return &ExecutionResult{0, nil, nil}, ErrMainTxHashCompleted
+		}
+		st.state.AddBalance(st.msg.From(), new(big.Int).SetUint64(evm.ChainConfig().PassBalance))
+		defer func() {
+			if vmerr != nil || err != nil {
+				evm.StateDB.RevertToSnapshot(snapshot)
+				return
 			}
-			isRefundWithdrawTx = true
-		} else {
-		}
-	} else if contractCreation { //deploy contract
-		blackcontract = crypto.CreateAddress(sender.Address(), evm.StateDB.GetNonce(sender.Address()))
-		if blackcontract.String() == evm.ChainConfig().BlackContractAddr {
-			st.state.AddBalance(st.msg.From(), new(big.Int).SetUint64(evm.ChainConfig().PassBalance))
-			defer func() {
-				fromValue := st.state.GetBalance(st.msg.From())
-				passValue := new(big.Int).SetUint64(evm.ChainConfig().PassBalance)
-				if fromValue.Cmp(passValue) < 0 {
-					ret = nil
-					result.UsedGas = 0
-					result.Err = nil
-					result.ReturnData = ret
-					if err == nil {
-						err = ErrGasLimitReached
-					}
-					evm.StateDB.RevertToSnapshot(snapshot)
-				} else {
-					st.state.SubBalance(st.msg.From(), new(big.Int).SetUint64(evm.ChainConfig().PassBalance))
+			nowBalance := st.state.GetBalance(msg.From())
+			if nowBalance.Cmp(new(big.Int).SetUint64(evm.ChainConfig().PassBalance)) < 0 {
+				ret = nil
+				result.UsedGas = 0
+				result.Err = nil
+				result.ReturnData = ret
+				if err == nil {
+					err = ErrGasLimitReached
 				}
-			}()
-		}
+				evm.StateDB.RevertToSnapshot(snapshot)
+			} else {
+				st.state.SubBalance(st.msg.From(), new(big.Int).SetUint64(evm.ChainConfig().PassBalance))
+			}
+		}()
 	}
-
 	if err = st.preCheck(); err != nil {
 		return
 	}
@@ -328,12 +285,17 @@ func (st *StateTransition) TransitionDb() (result *ExecutionResult, err error) {
 	istanbul := st.evm.ChainConfig().IsIstanbul(st.evm.BlockNumber)
 
 	// Pay intrinsic gas
-	gas, err := IntrinsicGas(st.data, contractCreation, homestead, istanbul)
+	var gas uint64
+	gas, err = IntrinsicGas(st.data, contractCreation, homestead, istanbul)
 	if err != nil {
 		return &ExecutionResult{0, nil, nil}, err
 	}
 	if err = st.useGas(gas); err != nil {
 		return &ExecutionResult{0, nil, nil}, err
+	}
+	// Check whether the init code size has been exceeded.
+	if rules.IsShanghai && contractCreation && len(msg.Data()) > params.MaxInitCodeSize {
+		return nil, fmt.Errorf("%w: code size %v limit %v", vm.ErrMaxInitCodeSizeExceeded, len(msg.Data()), params.MaxInitCodeSize)
 	}
 	// Set up the initial access list.
 	if rules.IsBerlin {
@@ -344,63 +306,32 @@ func (st *StateTransition) TransitionDb() (result *ExecutionResult, err error) {
 	} else {
 		// Increment the nonce for the next transaction
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
-		if len(recharges) > 0 {
-			for _, recharge := range recharges {
-				ret, st.gas, vmerr = evm.Call(sender, st.to(), st.data, st.gas, st.value, recharge)
-			}
-		} else {
-			ret, st.gas, vmerr = evm.Call(sender, st.to(), st.data, st.gas, st.value, nil)
-		}
+		ret, st.gas, vmerr = evm.Call(sender, st.to(), st.data, st.gas, st.value, nil)
 
 	}
 	if vmerr != nil {
 		if vmerr != vm.ErrCodeStoreOutOfGas {
 			log.Info("VM returned with error", "err", vmerr, "ret", string(ret))
 		}
-		//// The only possible consensus-error would be if there wasn't
-		//// sufficient balance to make the transfer happen. The first
-		//// balance transfer may never fail.
-		//if vmerr == vm.ErrInsufficientBalance {
-		//	return nil, 0, false, vmerr
-		//}
-		if vmerr == vm.ErrWithdawrefundCallFailed {
+		// The only possible consensus-error would be if there wasn't
+		// sufficient balance to make the transfer happen. The first
+		// balance transfer may never fail.
+		if vmerr == vm.ErrInsufficientBalance {
 			return &ExecutionResult{0, vmerr, ret}, vmerr
 		}
 	}
 
-	//bridge := evm.ChainConfig().BridgeContractAddr
-	//IsBridgeContract := false
-	//if bridge != "" {
-	//	addr := common.HexToAddress(bridge)
-	//	if addr != blackaddr {
-	//		codeSize := evm.StateDB.GetCodeSize(addr)
-	//		IsBridgeContract = codeSize > 0
-	//	}
-	//}
-
-	//if IsBridgeContract {
-	//	ok, errmsg := st.isSetArbiterListMethod()
-	//	if errmsg != nil {
-	//		log.Error("isSetArbiterListMethod error", "msg", errmsg)
-	//	}
-	//	if !ok {
-	//		ok, errmsg = st.isSetManualArbiterMethod()
-	//		if errmsg != nil {
-	//			log.Error("isSetManualArbiterMethod error", "msg", errmsg)
-	//		}
-	//	}
-	//	IsBridgeContract = ok
-	//}
-	if spv.IsRechargeTx(msg.Data(), msg.To()) && vmerr == nil {
+	if (isRechargeTx || isRefundWithdrawTx) && vmerr == nil {
 		st.refundCostGas()
 	} else {
 		st.refundGas()
 	}
 
-	if contractCreation && blackcontract.String() == evm.ChainConfig().BlackContractAddr || isRefundWithdrawTx {
-		st.state.AddBalance(st.msg.From(), new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice)) // Refund the cost
+	minerFee := new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice)
+
+	if isRechargeTx || isRefundWithdrawTx {
+		st.state.AddBalance(st.msg.From(), minerFee)
 	} else {
-		minerFee := new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice)
 		num := len(st.evm.ChainConfig().DeveloperContract)
 		if num > 0 && st.evm.ChainConfig().IsdeveloperSplitfeeTime(st.evm.Time.Uint64()) {
 			fee := big.NewInt(0).Mul(minerFee, big.NewInt(50))
@@ -514,3 +445,5 @@ func (st *StateTransition) refundCostGas() {
 func (st *StateTransition) gasUsed() uint64 {
 	return st.initialGas - st.gas
 }
+
+// gasUsed returns the amount of gas used up by the state transition.

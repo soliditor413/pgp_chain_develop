@@ -23,11 +23,14 @@ import (
 
 // List execution errors
 var (
-	ErrOutOfGas                 = errors.New("out of gas")
-	ErrCodeStoreOutOfGas        = errors.New("contract creation code storage out of gas")
-	ErrDepth                    = errors.New("max call depth exceeded")
-	ErrTraceLimitReached        = errors.New("the number of logs reached the specified limit")
-	ErrInsufficientBalance      = errors.New("insufficient balance for transfer")
+	ErrOutOfGas            = errors.New("out of gas")
+	ErrCodeStoreOutOfGas   = errors.New("contract creation code storage out of gas")
+	ErrDepth               = errors.New("max call depth exceeded")
+	ErrTraceLimitReached   = errors.New("the number of logs reached the specified limit")
+	ErrInsufficientBalance = errors.New("insufficient balance for transfer")
+	// ErrMaxInitCodeSizeExceeded is returned if creation transaction provides the init code bigger
+	// than init code size limit.
+	ErrMaxInitCodeSizeExceeded  = errors.New("max initcode size exceeded")
 	ErrContractAddressCollision = errors.New("contract address collision")
 	ErrNoCompatibleInterpreter  = errors.New("no compatible interpreter")
 

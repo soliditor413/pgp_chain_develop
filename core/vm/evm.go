@@ -23,12 +23,9 @@ import (
 	"time"
 
 	"github.com/pgprotocol/pgp-chain/common"
-	"github.com/pgprotocol/pgp-chain/common/hexutil"
-	"github.com/pgprotocol/pgp-chain/core/types"
 	"github.com/pgprotocol/pgp-chain/crypto"
 	"github.com/pgprotocol/pgp-chain/params"
 	"github.com/pgprotocol/pgp-chain/spv"
-	"github.com/pgprotocol/pgp-chain/withdrawfailedtx"
 )
 
 // emptyCodeHash is used by create to ensure deployment is disallowed to already
@@ -197,90 +194,9 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	}
 
 	var (
-		to        = AccountRef(addr)
-		snapshot  = evm.StateDB.Snapshot()
-		blackAddr common.Address
-		txHash    string
+		to       = AccountRef(addr)
+		snapshot = evm.StateDB.Snapshot()
 	)
-	isRechargeTx := false
-	var targetMemoData []byte
-	//this is recharge tx
-	if blackAddr == addr {
-		emptyHash := common.Hash{}
-		isWithdrawTx, txid := withdrawfailedtx.IsWithdawFailedTx(input, evm.chainConfig.BlackContractAddr)
-		if isWithdrawTx {
-			completeTxHash := evm.StateDB.GetState(blackAddr, common.HexToHash(txid))
-			res := withdrawfailedtx.VerifySignatures(input)
-			if completeTxHash == emptyHash && res == true {
-				from, amount, err := withdrawfailedtx.GetWithdrawTxValue(txid)
-				if err != nil {
-					return nil, gas, err
-				}
-				to = AccountRef(common.HexToAddress(from))
-				value = amount
-				eventHash := withdrawfailedtx.GetRefundEventHash()
-				topics := make([]common.Hash, 5)
-				topics[0] = eventHash
-				topics[1] = common.HexToHash(evm.chainConfig.BlackContractAddr)
-				topics[2] = common.HexToHash(caller.Address().String())
-				topics[3] = common.HexToHash(from)
-				topics[4] = common.BigToHash(amount)
-				evm.StateDB.AddLog(&types.Log{
-					Address:     common.HexToAddress(evm.chainConfig.BlackContractAddr),
-					Topics:      topics,
-					Data:        nil,
-					BlockNumber: evm.BlockNumber.Uint64(),
-				})
-				//first give caller, then caller transfer to target behind
-				evm.StateDB.AddBalance(caller.Address(), amount)
-				withdrawfailedtx.OnProcessFaildWithdrawTx(txid)
-			} else {
-				return nil, gas, ErrWithdawrefundCallFailed
-			}
-		} else if recharge != nil {
-			isSmallRechargeTx := false
-			if len(input) > 32 {
-				rawTxid, _, _, _ := spv.IsSmallCrossTxByData(input)
-				isSmallRechargeTx = len(rawTxid) > 0
-				txHash = rawTxid
-			}
-			if len(input) == 32 {
-				txHash = hexutil.Encode(input)
-			}
-
-			if len(input) == 32 || isSmallRechargeTx {
-				completeTxHash := evm.StateDB.GetState(blackAddr, common.HexToHash(txHash))
-				if completeTxHash != emptyHash {
-					return nil, gas, spv.ErrMainTxHashPresence
-				}
-				addr = recharge.TargetAddress
-				if recharge.TargetAddress != blackAddr && recharge.TargetAmount.Cmp(recharge.Fee) >= 0 {
-					isRechargeTx = true
-					to = AccountRef(recharge.TargetAddress)
-					if len(recharge.TargetData) > 0 {
-						targetMemoData = recharge.TargetData
-					}
-					value = new(big.Int).Sub(recharge.TargetAmount, recharge.Fee)
-					topics := make([]common.Hash, 5)
-					topics[0] = common.HexToHash("0x09f15c376272c265d7fcb47bf57d8f84a928195e6ea156d12f5a3cd05b8fed5a")
-					topics[1] = common.HexToHash(caller.Address().String())
-					topics[2] = common.HexToHash(txHash)
-					topics[3] = common.HexToHash(recharge.TargetAddress.String())
-					topics[4] = common.BigToHash(value)
-					evm.StateDB.AddLog(&types.Log{
-						Address: blackAddr,
-						Topics:  topics,
-						Data:    nil,
-						// This is a non-consensus field, but assigned here because
-						// core/state doesn't know the current block number.
-						BlockNumber: evm.BlockNumber.Uint64(),
-					})
-					evm.StateDB.AddBalance(caller.Address(), value)
-				}
-			}
-		}
-
-	}
 	// Fail if we're trying to transfer more than the available balance
 	if value.Sign() != 0 && !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, gas, ErrInsufficientBalance
@@ -319,10 +235,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		}
 	}
 
-	if isRechargeTx {
-		input = targetMemoData
-	}
-
 	if isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
 	} else {
@@ -345,11 +257,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			//	fmt.Println("callData>>>>>>>>>>>>>", "account", data.account.String(), "gasUsed", data.gasCost)
 			//}
 		}
-	}
-
-	//if is withdraw tx, reduce the contract eth. Because the withdrawal transaction is to transfer ETH token to the black contract, the black contract broadcast event
-	if to.Address().String() == evm.ChainConfig().BlackContractAddr && err == nil {
-		evm.StateDB.SubBalance(to.Address(), value)
 	}
 
 	// When an error was returned by the EVM or when setting the creation code
