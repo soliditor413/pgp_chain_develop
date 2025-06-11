@@ -6,16 +6,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	ethereum "github.com/pgprotocol/pgp-chain"
 	"math/big"
 	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
 
-	"github.com/elastos/Elastos.ELA.SPV/bloom"
-	spv "github.com/elastos/Elastos.ELA.SPV/interface"
-	"github.com/elastos/Elastos.ELA.SPV/util"
+	ethereum "github.com/pgprotocol/pgp-chain"
 	"github.com/pgprotocol/pgp-chain/blocksigner"
 	ethCommon "github.com/pgprotocol/pgp-chain/common"
 	"github.com/pgprotocol/pgp-chain/consensus"
@@ -25,12 +22,16 @@ import (
 	"github.com/pgprotocol/pgp-chain/ethdb/leveldb"
 	"github.com/pgprotocol/pgp-chain/event"
 	"github.com/pgprotocol/pgp-chain/log"
+	"github.com/pgprotocol/pgp-chain/params"
 	"github.com/pgprotocol/pgp-chain/pledgeBill"
 	"github.com/pgprotocol/pgp-chain/rpc"
 	"github.com/pgprotocol/pgp-chain/smallcrosstx"
 
 	"golang.org/x/net/context"
 
+	"github.com/elastos/Elastos.ELA.SPV/bloom"
+	spv "github.com/elastos/Elastos.ELA.SPV/interface"
+	"github.com/elastos/Elastos.ELA.SPV/util"
 	"github.com/elastos/Elastos.ELA/common"
 	"github.com/elastos/Elastos.ELA/common/config"
 	elatx "github.com/elastos/Elastos.ELA/core/transaction"
@@ -1299,14 +1300,15 @@ func GetClient() *ethclient.Client {
 }
 
 func GetMinGasPrice(spvHeight uint32) (*big.Int, error) {
-	if SpvService == nil {
-		return big.NewInt(0), errors.New("spv service is nil")
-	}
-	if spvHeight == 0 {
-		spvHeight = uint32(GetSpvHeight())
-	}
-	price, err := SpvService.GetMinGasPrice(spvHeight, SpvService.GenesisHash)
-	return price, err
+	return big.NewInt(50 * params.GWei), nil
+	//if SpvService == nil {
+	//	return big.NewInt(0), errors.New("spv service is nil")
+	//}
+	//if spvHeight == 0 {
+	//	spvHeight = uint32(GetSpvHeight())
+	//}
+	//price, err := SpvService.GetMinGasPrice(spvHeight, SpvService.GenesisHash)
+	//return price, err
 }
 
 func Close() {
