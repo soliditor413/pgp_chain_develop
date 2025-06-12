@@ -1492,8 +1492,9 @@ func (c *getMainChainRechargeData) RequiredGas(input []byte) uint64 {
 }
 
 func (c *getMainChainRechargeData) Run(input []byte) ([]byte, error) {
-	elaHash := getData(input, 32, 32)
+	elaHash := getData(input, 0, 32)
 	hash := common.BytesToHash(elaHash).String()
+	fmt.Println("getMainChainRechargeData hash", hash)
 	datas, _, err := spv.GetRechargeDataByTxhash(hash)
 	if err != nil {
 		log.Error("GetRechargeDataByTxhash failed", "error", err)

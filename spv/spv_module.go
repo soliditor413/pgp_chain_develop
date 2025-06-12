@@ -763,6 +763,7 @@ func SendTransaction(from ethCommon.Address, elaTx string, fee *big.Int) (err er
 		}
 	}
 	data := GetRechargeData(elaTx, smallTxData)
+	fmt.Println("GetRechargeData ", data)
 	msg := ethereum.CallMsg{From: from, To: &ELAMinterAddress, Data: data}
 	gasLimit, err := ipcClient.EstimateGas(context.Background(), msg)
 	if err != nil {

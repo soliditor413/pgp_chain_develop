@@ -253,13 +253,16 @@ func (st *StateTransition) TransitionDb() (result *ExecutionResult, err error) {
 	isRechargeTx := spv.IsRechargeTx(msg.Data(), msg.To())
 	//recharge tx and widthdraw refund
 	if isRechargeTx || isRefundWithdrawTx {
+		fmt.Println(">>>>>>>> isRechargeTx <<<<<<<<", isRechargeTx, " isRefundWithdrawTx ", isRefundWithdrawTx)
 		completed, _ := spv.IsCompletedByTxInput(msg.Data())
 		if completed {
+			fmt.Println(">>>>>>>> recharge tx completed <<<<<<<<")
 			return &ExecutionResult{0, nil, nil}, ErrMainTxHashCompleted
 		}
 		st.state.AddBalance(st.msg.From(), new(big.Int).SetUint64(evm.ChainConfig().PassBalance))
 		defer func() {
 			if vmerr != nil || err != nil {
+				fmt.Println(">>>>>>>> recharge tx failed revert <<<<<<<<")
 				evm.StateDB.RevertToSnapshot(snapshot)
 				return
 			}
@@ -272,6 +275,7 @@ func (st *StateTransition) TransitionDb() (result *ExecutionResult, err error) {
 				if err == nil {
 					err = ErrGasLimitReached
 				}
+				fmt.Println(">>>>>>>> recharge tx ErrGasLimitReached <<<<<<<<")
 				evm.StateDB.RevertToSnapshot(snapshot)
 			} else {
 				st.state.SubBalance(st.msg.From(), new(big.Int).SetUint64(evm.ChainConfig().PassBalance))
@@ -279,7 +283,7 @@ func (st *StateTransition) TransitionDb() (result *ExecutionResult, err error) {
 		}()
 	}
 	if err = st.preCheck(); err != nil {
-		return
+		return nil, err
 	}
 	homestead := st.evm.ChainConfig().IsHomestead(st.evm.BlockNumber)
 	istanbul := st.evm.ChainConfig().IsIstanbul(st.evm.BlockNumber)
