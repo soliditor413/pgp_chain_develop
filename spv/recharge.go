@@ -2,7 +2,6 @@ package spv
 
 import (
 	"errors"
-	"fmt"
 	"math/big"
 	"strings"
 
@@ -63,7 +62,6 @@ func GetRechargeDataByTxhash(elaHash string) (RechargeDatas, *big.Int, error) {
 	fees := strings.Split(string(feeValues), ",")
 	amounts := strings.Split(string(outputs), ",")
 	targetMemos := strings.Split(string(memos), ",")
-	fmt.Println("addrs", addrs, "fees", fees, "amounts", amounts, "targetMemos", targetMemos)
 	if len(addrs) != len(fees) || len(fees) != len(amounts) || len(amounts) != len(addrs) {
 		return rechargeDatas, totalFee, errors.New("recharge data error : " + elaHash)
 	}

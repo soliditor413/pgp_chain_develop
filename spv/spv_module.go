@@ -244,16 +244,15 @@ func MinedBroadcastLoop(minedBlockSub *event.TypeMuxSubscription,
 		case <-minedBlockSub.Chan():
 			i++
 			if i >= 2 {
+				i = 1
+			}
+			go accessFailedRechargeTx()
+			atomic.StoreInt32(&candSend, 0)
+		case <-ondutySub.Chan():
+			if i >= 1 {
 				atomic.StoreInt32(&candSend, 1)
 				IteratorUnTransaction(GetDefaultSingerAddr())
 			}
-		case <-ondutySub.Chan():
-			if i >= 2 {
-				i = 0
-				log.Info("receive onduty event")
-				atomic.StoreInt32(&candSend, 0)
-			}
-			go accessFailedRechargeTx()
 			go eevents.Notify(dpos.ETOnDutyEvent, nil)
 		case obj := <-smallCrossTxSub.Chan():
 			if evt, ok := obj.Data.(events.CmallCrossTx); ok {
@@ -533,6 +532,9 @@ func savePayloadInfo(elaTx it.Transaction, l *listener) {
 
 // UpTransactionIndex records spv-aware refill transaction index
 func UpTransactionIndex(elaTx string) {
+	if spvTransactiondb == nil {
+		return
+	}
 	muupti.Lock()
 	defer muupti.Unlock()
 	if strings.HasPrefix(elaTx, "0x") {
@@ -560,6 +562,9 @@ func UpTransactionIndex(elaTx string) {
 func IteratorUnTransaction(from ethCommon.Address) {
 	muiterator.Lock()
 	defer muiterator.Unlock()
+	if spvTransactiondb == nil {
+		return
+	}
 	if !blocksigner.SelfIsProducer {
 		log.Error("error signers", "signer", from.String())
 		return
@@ -763,7 +768,6 @@ func SendTransaction(from ethCommon.Address, elaTx string, fee *big.Int) (err er
 		}
 	}
 	data := GetRechargeData(elaTx, smallTxData)
-	fmt.Println("GetRechargeData ", data)
 	msg := ethereum.CallMsg{From: from, To: &ELAMinterAddress, Data: data}
 	gasLimit, err := ipcClient.EstimateGas(context.Background(), msg)
 	if err != nil {

@@ -251,18 +251,17 @@ func (st *StateTransition) TransitionDb() (result *ExecutionResult, err error) {
 	contractCreation := msg.To() == nil
 	isRefundWithdrawTx := spv.IsRefundWithdrawTx(msg.Data(), msg.To())
 	isRechargeTx := spv.IsRechargeTx(msg.Data(), msg.To())
+	elaHash := ""
 	//recharge tx and widthdraw refund
 	if isRechargeTx || isRefundWithdrawTx {
-		fmt.Println(">>>>>>>> isRechargeTx <<<<<<<<", isRechargeTx, " isRefundWithdrawTx ", isRefundWithdrawTx)
-		completed, _ := spv.IsCompletedByTxInput(msg.Data())
+		completed := false
+		completed, elaHash = spv.IsCompletedByTxInput(msg.Data())
 		if completed {
-			fmt.Println(">>>>>>>> recharge tx completed <<<<<<<<")
 			return &ExecutionResult{0, nil, nil}, ErrMainTxHashCompleted
 		}
 		st.state.AddBalance(st.msg.From(), new(big.Int).SetUint64(evm.ChainConfig().PassBalance))
 		defer func() {
 			if vmerr != nil || err != nil {
-				fmt.Println(">>>>>>>> recharge tx failed revert <<<<<<<<")
 				evm.StateDB.RevertToSnapshot(snapshot)
 				return
 			}
@@ -275,7 +274,6 @@ func (st *StateTransition) TransitionDb() (result *ExecutionResult, err error) {
 				if err == nil {
 					err = ErrGasLimitReached
 				}
-				fmt.Println(">>>>>>>> recharge tx ErrGasLimitReached <<<<<<<<")
 				evm.StateDB.RevertToSnapshot(snapshot)
 			} else {
 				st.state.SubBalance(st.msg.From(), new(big.Int).SetUint64(evm.ChainConfig().PassBalance))
@@ -311,11 +309,10 @@ func (st *StateTransition) TransitionDb() (result *ExecutionResult, err error) {
 		// Increment the nonce for the next transaction
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
 		ret, st.gas, vmerr = evm.Call(sender, st.to(), st.data, st.gas, st.value, nil)
-
 	}
 	if vmerr != nil {
 		if vmerr != vm.ErrCodeStoreOutOfGas {
-			log.Info("VM returned with error", "err", vmerr, "ret", string(ret))
+			log.Info("VM returned with error", "err", vmerr, "ret", string(ret), " elaHash ", elaHash)
 		}
 		// The only possible consensus-error would be if there wasn't
 		// sufficient balance to make the transfer happen. The first

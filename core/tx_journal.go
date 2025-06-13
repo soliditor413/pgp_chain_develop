@@ -25,6 +25,7 @@ import (
 	"github.com/pgprotocol/pgp-chain/core/types"
 	"github.com/pgprotocol/pgp-chain/log"
 	"github.com/pgprotocol/pgp-chain/rlp"
+	"github.com/pgprotocol/pgp-chain/spv"
 )
 
 // errNoActiveJournal is returned if a transaction is attempted to be inserted
@@ -80,7 +81,13 @@ func (journal *txJournal) load(add func([]*types.Transaction) []error) error {
 	// appropriate progress counters. Then use this method to load all the
 	// journaled transactions in small-ish batches.
 	loadBatch := func(txs types.Transactions) {
-		for _, err := range add(txs) {
+		validTxs := make([]*types.Transaction, 0)
+		for _, tx := range txs {
+			if !spv.IsRechargeTx(tx.Data(), tx.To()) {
+				validTxs = append(validTxs, tx)
+			}
+		}
+		for _, err := range add(validTxs) {
 			if err != nil {
 				log.Debug("Failed to add journaled transaction", "err", err)
 				dropped++

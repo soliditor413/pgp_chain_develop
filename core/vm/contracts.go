@@ -1494,10 +1494,9 @@ func (c *getMainChainRechargeData) RequiredGas(input []byte) uint64 {
 func (c *getMainChainRechargeData) Run(input []byte) ([]byte, error) {
 	elaHash := getData(input, 0, 32)
 	hash := common.BytesToHash(elaHash).String()
-	fmt.Println("getMainChainRechargeData hash", hash)
 	datas, _, err := spv.GetRechargeDataByTxhash(hash)
 	if err != nil {
-		log.Error("GetRechargeDataByTxhash failed", "error", err)
+		log.Error("GetRechargeDataByTxhash failed", "error", err, "hash ", hash)
 		return []byte{}, err
 	}
 	// Encode the RechargeDatas array to ABI-encoded bytes

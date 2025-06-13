@@ -503,7 +503,7 @@ func (p *Pbft) Finalize(chain consensus.ChainReader, header *types.Header, state
 
 func (p *Pbft) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
 	uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
-	dpos.Info("Pbft FinalizeAndAssemble")
+	dpos.Info("Pbft FinalizeAndAssemble", " txs ", len(txs), "height:", header.Number.Uint64())
 	// No block rewards in DPoS, so the state remains as is and uncles are dropped
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.CalcUncleHash(nil)
