@@ -22,8 +22,8 @@ module.exports = async function(json_data, res) {
                         payload["crosschainassets"] = new Array();
                     }
                     let event = common.web3.eth.abi.decodeLog(common.payloadReceived.inputs, log.data, log.topics.slice(1));
-                    let crosschainamount = String(common.retnum(common.web3.fromWei(event["_crosschainamount"])));
-                    let outputamount = String(common.retnum(common.web3.fromWei(event["_amount"])));
+                    let crosschainamount = String(common.retnum(common.web3.fromWei(event["_crosschainamount"], "gwei") * 10));
+                    let outputamount = String(common.retnum(common.web3.fromWei(event["_amount"], "gwei") * 10));
                     payload["crosschainassets"].push({
                         "crosschainaddress": event["_addr"],
                         "crosschainamount": crosschainamount,

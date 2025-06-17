@@ -645,103 +645,6 @@ func setNextSeek(seek uint64) {
 }
 
 // SendTransaction sends a reload transaction to txpool
-//func SendTransaction(from ethCommon.Address, elaTx string, fee *big.Int) (err error, finished bool) {
-//	ethTx, err := ipcClient.StorageAt(context.Background(), ethCommon.Address{}, ethCommon.HexToHash("0x"+elaTx), nil)
-//	if err != nil {
-//		log.Error(fmt.Sprintf("IpcClient StorageAt: %v", err))
-//		return err, true
-//	}
-//	h := ethCommon.Hash{}
-//	if ethCommon.BytesToHash(ethTx) != h {
-//		onElaTxPacked(elaTx)
-//		err = errors.New("Cross-chain transactions have been processed " + elaTx)
-//		return err, true
-//	}
-//	data, ctx, err := smallcrosstx.GetSmallCrossTxBytes(elaTx)
-//	if err == nil {
-//		res, errmsg := verifySmallCrossTxBySignature(ctx.RawTx, ctx.Signatures, ctx.BlockHeight)
-//		if errmsg != nil {
-//			return errmsg, false
-//		}
-//		if !res {
-//			recharges, _, errs := GetRechargeDataByTxhash(elaTx)
-//			if errs != nil || len(recharges) == 0 {
-//				return errors.New("verifyed small cross chain transaction failed"), false
-//			}
-//			var blackAddr ethCommon.Address
-//			for _, recharge := range recharges {
-//				if recharge.Fee.Cmp(new(big.Int)) <= 0 && recharge.TargetAmount.Cmp(new(big.Int)) <= 0 && recharge.TargetAddress == blackAddr {
-//					return errors.New("verifyed small cross chain transaction failed"), false
-//				} else {
-//					log.Info("send small cross chain transaction by spv", "elatx", elaTx)
-//					data, err = common.HexStringToBytes(elaTx)
-//				}
-//			}
-//		}
-//	} else {
-//		data, err = common.HexStringToBytes(elaTx)
-//	}
-//
-//	if err != nil {
-//		log.Error("elaTx HexStringToBytes: "+elaTx, "err", err)
-//		return err, true
-//	}
-//
-//	res, err := IsFailedElaTx(elaTx)
-//	if err != nil {
-//		return err, false
-//	}
-//	if res {
-//		err = errors.New("is failed tx, can't to send")
-//		return err, true
-//	}
-//	log.Error("IpcClient EstimateGas:", "data", len(data), "main txhash", elaTx)
-//	var blackAddr ethCommon.Address
-//	msg := ethereum.CallMsg{From: from, To: &blackAddr, Data: data, GasPrice: big.NewInt(1)}
-//	gasLimit, err := ipcClient.EstimateGas(context.Background(), msg)
-//	if err != nil {
-//		log.Error("IpcClient EstimateGas:", "err", err, "main txhash", elaTx)
-//		if err.Error() == ErrMainTxHashPresence.Error() {
-//			return err, true
-//		}
-//		res, err = IsFailedElaTx(elaTx)
-//		if err != nil {
-//			return err, false
-//		}
-//		if res {
-//			return err, true
-//		}
-//		OnTx2Failed(elaTx)
-//		return err, false
-//	}
-//
-//	if gasLimit == 0 {
-//		res, err = IsFailedElaTx(elaTx)
-//		if err != nil {
-//			return err, false
-//		}
-//		if res {
-//			return err, true
-//		}
-//		OnTx2Failed(elaTx)
-//		log.Error("gasLimit is zero:", "main txhash", elaTx)
-//		return err, false
-//	}
-//	if atomic.LoadInt32(&candSend) == 0 {
-//		err = errors.New("canSend is 0")
-//		return err, false
-//	}
-//	price := new(big.Int).Quo(fee, new(big.Int).SetUint64(gasLimit))
-//	callmsg := ethereum.TXMsg{From: from, To: &ethCommon.Address{}, Gas: gasLimit, Data: data, GasPrice: price}
-//	hash, err := ipcClient.SendPublicTransaction(context.Background(), callmsg)
-//	if err != nil {
-//		log.Info("Cross chain Transaction failed", "elaTx", elaTx, "ethTh", hash.String(), "gasLimit", gasLimit, "price", price.String())
-//		return err, true
-//	}
-//	log.Info("Cross chain Transaction", "elaTx", elaTx, "ethTh", hash.String(), "gasLimit", gasLimit, "price.String()", price.String())
-//	return nil, true
-//}
-
 func SendTransaction(from ethCommon.Address, elaTx string, fee *big.Int) (err error, finished bool) {
 	completed := IsCompleted(elaTx, ipcClient)
 	if completed {
@@ -796,6 +699,7 @@ func SendTransaction(from ethCommon.Address, elaTx string, fee *big.Int) (err er
 		log.Error("IpcClient SuggestGasPrice:", "err", err)
 		return err, false
 	}
+	price = price.Mul(price, big.NewInt(2))
 	callmsg := ethereum.TXMsg{From: from, To: &ELAMinterAddress, Gas: gasLimit, Data: data, GasPrice: price}
 	hash, err := ipcClient.SendPublicTransaction(context.Background(), callmsg)
 	if err != nil {
