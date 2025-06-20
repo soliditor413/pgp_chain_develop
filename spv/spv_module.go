@@ -103,7 +103,7 @@ const (
 	GASLimtScale = 10
 	blockDiff    = 6
 
-	IsOnlyCRConsensus = true
+	IsOnlyCRConsensus = false
 )
 
 const (

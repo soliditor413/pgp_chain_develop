@@ -639,7 +639,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 				utils.Fatalf("Failed to start mining: %v", err)
 			}
 		}
-		go startLayer2(ethereum.BlockChain())
+		//go startLayer2(ethereum.BlockChain())
 	}
 
 	//xxl add update Arbiter List To Layer1 get param
