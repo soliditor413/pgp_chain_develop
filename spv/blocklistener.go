@@ -140,6 +140,8 @@ func IsNexturnBlock(block interface{}) bool {
 
 	if IsOnlyCRConsensus {
 		payloadData.DPOSPublicKeys = make([][]byte, 0)
+	} else {
+		payloadData.CRPublicKeys = make([][]byte, 0)
 	}
 
 	nextTurnDposInfo.WorkingHeight = payloadData.WorkingHeight
@@ -157,6 +159,8 @@ func InitNextTurnDposInfo() {
 	}
 	if IsOnlyCRConsensus {
 		normalArbiters = make([][]byte, 0)
+	} else {
+		crcArbiters = make([][]byte, 0)
 	}
 
 	if GetCurrentConsensusMode() == spv.POW && len(crcArbiters) == 0 && len(normalArbiters) == 0 {
