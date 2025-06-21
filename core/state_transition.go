@@ -333,17 +333,25 @@ func (st *StateTransition) TransitionDb() (result *ExecutionResult, err error) {
 	if isRechargeTx || isRefundWithdrawTx {
 		st.state.AddBalance(st.msg.From(), minerFee)
 	} else {
-		num := len(st.evm.ChainConfig().DeveloperContract)
-		if num > 0 && st.evm.ChainConfig().IsdeveloperSplitfeeTime(st.evm.Time.Uint64()) {
-			fee := big.NewInt(0).Mul(minerFee, big.NewInt(50))
-			fee = big.NewInt(0).Div(fee, big.NewInt(100))
-			subFee := fee.Div(fee, big.NewInt(int64(num)))
-			for _, account := range st.evm.ChainConfig().DeveloperContract {
-				developerAddress := common.HexToAddress(account)
-				st.state.AddBalance(developerAddress, subFee)
-				minerFee = minerFee.Sub(minerFee, subFee)
+		developerAddress := st.evm.ChainConfig().DeveloperContract
+		num := len(developerAddress)
+		// During the developer split fee period, half of the transaction fee is allocated to the ELA foundation address
+		if st.evm.ChainConfig().IsdeveloperSplitfeeTime(st.evm.Time.Uint64()) {
+			if num != 2 {
+				return &ExecutionResult{st.gasUsed(), vmerr, ret}, vm.ErrDeveloperSplitFee
 			}
+			elaFoundationAddress := common.HexToAddress(developerAddress[0])
+			fee := big.NewInt(0).Div(minerFee, big.NewInt(2))
+			st.state.AddBalance(elaFoundationAddress, fee)
+			minerFee = minerFee.Sub(minerFee, fee)
+			// Calculate 10% of the transaction fee for the cards address
+			cardsFee := big.NewInt(0).Mul(minerFee, big.NewInt(10))
+			cardsFee = big.NewInt(0).Div(cardsFee, big.NewInt(100))
+			cardsAddress := common.HexToAddress(developerAddress[1])
+			st.state.AddBalance(cardsAddress, cardsFee)
+			minerFee = minerFee.Sub(minerFee, cardsFee)
 		}
+		// Allocate the remaining fee to the miner after deducting the cards fee
 		st.state.AddBalance(st.evm.Coinbase, minerFee)
 	}
 	return &ExecutionResult{st.gasUsed(), vmerr, ret}, err

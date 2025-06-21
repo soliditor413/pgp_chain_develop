@@ -48,6 +48,8 @@ var (
 	// errStopToken is an internal token indicating interpreter loop termination,
 	// never returned to outside callers.
 	errStopToken = errors.New("stop token")
+
+	ErrDeveloperSplitFee = errors.New("need two developer addresses")
 )
 
 // ErrStackUnderflow wraps an evm error when the items on the stack less
