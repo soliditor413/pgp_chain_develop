@@ -427,6 +427,10 @@ func DefaultTestnetGenesisBlock() *Genesis {
 	extra = append(extra, address12...)
 	extra = append(extra, bytes.Repeat([]byte{0x00}, 65)...)
 	genesis.ExtraData = extra
+	initBalance, ok := big.NewInt(0).SetString("200000000000000000000000000", 10)
+	if !ok {
+		panic("invalid initBalance")
+	}
 	genesis.Alloc = GenesisAlloc{
 		params.ELAMINTER: {
 			Code:    params.ELAMINTER_CODE,
@@ -435,6 +439,9 @@ func DefaultTestnetGenesisBlock() *Genesis {
 		params.ELATOKEN: {
 			Code:    params.ELATOKEN_CODE,
 			Balance: big.NewInt(0),
+		},
+		common.HexToAddress("0x39BEA06206f1Dc772f8Ec483e9003872C8FA6698"): {
+			Balance: initBalance,
 		},
 	}
 	return genesis
