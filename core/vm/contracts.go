@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/pgprotocol/pgp-chain/accounts"
 	"github.com/pgprotocol/pgp-chain/accounts/abi"
 	"github.com/pgprotocol/pgp-chain/common"
 	"github.com/pgprotocol/pgp-chain/common/math"
@@ -751,25 +750,19 @@ func (b *pbkVerifySignature) RequiredGas(input []byte) uint64 {
 
 func (b *pbkVerifySignature) Run(input []byte) ([]byte, error) {
 	//length := getData(input, 0, 32)
-	pubkey := getData(input, 32, 33)
-	digest := getData(input, 65, 32)
-	sig := getData(input, 97, 65)
-	digest = accounts.TextHash(digest)
+	pubkey := getData(input, 0, 33)
+	digest := getData(input, 33, 32)
+	sig := getData(input, 65, 64)
 
-	if sig[crypto.RecoveryIDOffset] >= 27 {
-		sig[crypto.RecoveryIDOffset] -= 27
-	}
-	signerPuk, err := crypto.SigToPub(digest, sig)
+	publicKey, err := elaCrypto.DecodePoint(pubkey)
 	if err != nil {
-		fmt.Println("SigToPub error", signerPuk, err)
-		return false32Byte, err
+		return false32Byte, errP256VerifyInvalidPublicKey
 	}
-	pubkeyBytes := crypto.CompressPubkey(signerPuk)
-
-	if bytes.Equal(pubkeyBytes, pubkey) {
-		return true32Byte, nil
+	err = elaCrypto.VerifyDigest(*publicKey, digest, sig)
+	if err != nil {
+		return false32Byte, nil
 	}
-	return false32Byte, nil
+	return true32Byte, nil
 }
 
 type pledgeBillVerify struct{}
