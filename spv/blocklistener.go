@@ -152,6 +152,7 @@ func IsNexturnBlock(block interface{}) bool {
 }
 
 func InitNextTurnDposInfo() {
+	SetCurrentCRProducers()
 	workingHeight, crcArbiters, normalArbiters, err := SpvService.GetNextArbiters()
 	if err != nil {
 		log.Error("GetNextArbiters error", "err", err.Error())

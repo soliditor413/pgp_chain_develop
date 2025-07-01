@@ -297,7 +297,7 @@ func (p *Pbft) OnInsertBlock(block *types.Block) bool {
 		isCurrent := p.IsCurrentProducers(producers)
 		log.Info("current producers spvHeight", "height", p.dispatcher.GetConsensusView().GetSpvHeight(), "block.Nonce()", block.Nonce(), "isBackword", isBackword, "isCurrent", isCurrent)
 		if isBackword && !isCurrent {
-			p.dispatcher.GetConsensusView().UpdateProducers(producers, totalCount, spvHeight)
+			p.UpdateCurrentProducers(producers, totalCount, spvHeight)
 			go p.AnnounceDAddr()
 			go p.Recover()
 			return true

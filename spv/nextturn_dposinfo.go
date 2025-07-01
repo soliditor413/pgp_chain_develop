@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"errors"
 	"github.com/pgprotocol/pgp-chain/common"
+	"github.com/pgprotocol/pgp-chain/core/events"
 	"github.com/pgprotocol/pgp-chain/log"
 
 	spv "github.com/elastos/Elastos.ELA.SPV/interface"
-
+	elacom "github.com/elastos/Elastos.ELA/common"
 	"github.com/elastos/Elastos.ELA/core/types/payload"
 )
 
@@ -18,6 +19,10 @@ type NextTurnDPOSInfo struct {
 var (
 	nextTurnDposInfo *NextTurnDPOSInfo
 	zero             = common.Hex2Bytes("000000000000000000000000000000000000000000000000000000000000000000")
+)
+
+const (
+	CURRENT_CRC_PRODUCERS = "current_crc_producers"
 )
 
 func GetTotalProducersCount() int {
@@ -50,6 +55,8 @@ func GetProducers(elaHeight uint64) ([][]byte, int, error) {
 		return producers, totalCount, errors.New("spv is not start")
 	}
 	if GetCurrentConsensusMode() == spv.POW {
+		producers = GetCurrentCRProducers()
+		totalCount = len(producers)
 		return producers, totalCount, nil
 	}
 	crcArbiters, normalArbitrs, err := SpvService.GetArbiters(uint32(elaHeight))
@@ -93,6 +100,83 @@ func GetWorkingHeight() uint32 {
 	return 0
 }
 
-func GetSpvService() *Service {
-	return SpvService
+func SetCurrentCRProducers() {
+	if spvTransactiondb == nil {
+		return
+	}
+	transactionDBMutex.Lock()
+	defer transactionDBMutex.Unlock()
+	b := new(bytes.Buffer)
+	bestSpvHeight := GetSpvHeight()
+	crcArbiters, _, err := SpvService.GetArbiters(uint32(bestSpvHeight))
+	if err != nil {
+		log.Error("[SetCurrentCRProducers] GetArbiters error", "error", err)
+		return
+	}
+	count := len(crcArbiters)
+	if count == 0 {
+		log.Error("not SetCurrentCRProducers crc arbitrator is empty")
+		return
+	}
+	err = elacom.WriteVarUint(b, uint64(count))
+	if err != nil {
+		log.Error("[SetCurrentCRProducers]write count error", "error", err)
+		return
+	}
+
+	for _, arbiter := range crcArbiters {
+		if len(arbiter) > 0 && bytes.Compare(zero, arbiter) != 0 {
+			err = elacom.WriteVarBytes(b, arbiter)
+			if err != nil {
+				log.Error("[SetCurrentCRProducers]WriteVarBytes error", "error", err)
+				return
+			}
+		}
+	}
+
+	err = spvTransactiondb.Put([]byte(CURRENT_CRC_PRODUCERS), b.Bytes())
+	if err != nil {
+		log.Error("[setCurrentCRProducers] write db error", "error", err)
+		return
+	}
+}
+
+func GetCurrentCRProducers() [][]byte {
+	if spvTransactiondb == nil {
+		return nil
+	}
+	transactionDBMutex.Lock()
+	defer transactionDBMutex.Unlock()
+	b, err := spvTransactiondb.Get([]byte(CURRENT_CRC_PRODUCERS))
+	if err != nil {
+		log.Error("[GetCurrentCRProducers] read db error", "error", err)
+		return nil
+	}
+	if b == nil {
+		return nil
+	}
+	crcArbiters := make([][]byte, 0)
+	count, err := elacom.ReadVarUint(bytes.NewReader(b), 0)
+	for i := 0; i < int(count); i++ {
+		arbiter, err := elacom.ReadVarBytes(bytes.NewReader(b), 33, "arbiter")
+		if err != nil {
+			log.Error("[GetCurrentCRProducers] read arbiter error", "error", err)
+			return nil
+		}
+		if len(arbiter) > 0 && bytes.Compare(zero, arbiter) != 0 {
+			crcArbiters = append(crcArbiters, arbiter)
+		}
+	}
+	return crcArbiters
+}
+
+func BroadInitCurrentProducers() bool {
+	if SpvService == nil {
+		return false
+	}
+	err := SpvService.mux.Post(events.InitCurrentProducers{})
+	if err != nil {
+		return false
+	}
+	return true
 }
