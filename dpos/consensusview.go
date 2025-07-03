@@ -288,7 +288,7 @@ func (v *ConsensusView) GetCRMajorityCount() int {
 }
 
 func (v *ConsensusView) GetMinAcceptVoteCount() int {
-	return 12
+	return 5
 }
 
 func (v *ConsensusView) GetMajorityCountByTotalSigners(totalSigner int) int {
