@@ -231,7 +231,7 @@ func (p *Pbft) checkBPosFullVoteFork(count int) bool {
 	if p.dispatcher.GetConsensusView().HasProducerMajorityCount(connectedCount) {
 		return false
 	}
-	return count >= p.dispatcher.GetConsensusView().GetCRMajorityCount()
+	return count >= p.dispatcher.GetConsensusView().GetMinAcceptVoteCount()
 }
 
 func (p *Pbft) GetMainChainHeight(pid peer.PID) uint64 {
@@ -847,7 +847,7 @@ func (p *Pbft) broadConfirmMsg(confirm *payload.Confirm, height uint64) {
 func (p *Pbft) verifyConfirm(confirm *payload.Confirm, elaHeight uint64) error {
 	minSignCount := 0
 	if elaHeight == 0 {
-		minSignCount = p.dispatcher.GetConsensusView().GetCRMajorityCount()
+		minSignCount = p.dispatcher.GetConsensusView().GetMinAcceptVoteCount()
 	} else {
 		_, count, err := spv.GetProducers(elaHeight)
 		if err != nil {
@@ -857,7 +857,7 @@ func (p *Pbft) verifyConfirm(confirm *payload.Confirm, elaHeight uint64) error {
 	}
 	if len(confirm.Votes) < minSignCount {
 		if p.timeSource.AdjustedTime().Unix() <= p.cfg.BPosFullVoteTime-5 {
-			minSignCount = p.dispatcher.GetConsensusView().GetCRMajorityCount()
+			minSignCount = p.dispatcher.GetConsensusView().GetMinAcceptVoteCount()
 		}
 	}
 	err := dpos.CheckConfirm(confirm, minSignCount)

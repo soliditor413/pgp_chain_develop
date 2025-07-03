@@ -15,7 +15,7 @@ import (
 	"github.com/pgprotocol/pgp-chain/common"
 )
 
-var defaultCRCSignerNumber = 36
+var defaultCRCSignerNumber = 12
 var zero = common.Hex2Bytes("000000000000000000000000000000000000000000000000000000000000000000")
 
 type Producers struct {
