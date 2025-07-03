@@ -572,11 +572,19 @@ func (p *Pbft) OnRecover() {
 	p.recoverAbnormalState()
 }
 
+func (p *Pbft) GetMinAcceptVoteCount() int {
+	if p.timeSource.AdjustedTime().Unix() < p.cfg.BPosFullVoteTime {
+		return p.dispatcher.GetConsensusView().GetMinAcceptVoteCount()
+	}
+	return p.dispatcher.GetConsensusView().GetMajorityCount()
+
+}
+
 func (p *Pbft) recoverAbnormalState() bool {
 	if p.recoverStarted {
 		return false
 	}
-	minCount := p.dispatcher.GetConsensusView().GetMajorityCount()
+	minCount := p.GetMinAcceptVoteCount()
 	if producers := p.dispatcher.GetConsensusView().GetProducers(); len(producers) > 0 {
 		if peers := p.network.GetActivePeers(); len(peers) < minCount {
 			log.Error("[recoverAbnormalState] can not find active peer", "minCount", minCount, "peers.size", len(peers))
@@ -677,7 +685,7 @@ func (p *Pbft) OnResponseResetViewReceived(msg *msg.ResetView) {
 	if err != nil {
 		return
 	}
-	if p.dispatcher.GetResetViewReqCount() >= p.dispatcher.GetConsensusView().GetMajorityCount() {
+	if p.dispatcher.GetResetViewReqCount() >= p.GetMinAcceptVoteCount() {
 		// do reset
 		header := p.chain.CurrentHeader()
 		p.dispatcher.ResetConsensus(header.Number.Uint64())

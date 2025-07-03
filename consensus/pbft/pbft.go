@@ -217,7 +217,7 @@ func New(chainConfig *params.ChainConfig, dataDir string) *Pbft {
 }
 
 func (p *Pbft) checkBPosFullVoteFork(count int) bool {
-	fmt.Println("p.cfg.BPosFullVoteTime  ", p.cfg.BPosFullVoteTime)
+	dpos.Info("checkBPosFullVoteFork", "p.cfg.BPosFullVoteTime  ", p.cfg.BPosFullVoteTime)
 	if p.timeSource.AdjustedTime().Unix() > p.cfg.BPosFullVoteTime {
 		return false
 	}
@@ -496,6 +496,9 @@ func (p *Pbft) Prepare(chain consensus.ChainReader, header *types.Header) error 
 	if p.dispatcher.GetConsensusView().IsRunning() && p.enableViewLoop {
 		return ErrConsensusIsRunning
 	}
+	if !p.IsProducer() {
+		return errUnauthorizedSigner
+	}
 	p.Start(parent.Time)
 	header.Time = parent.Time + p.period
 	if header.Time < nowTime {
@@ -764,6 +767,7 @@ func (p *Pbft) GetActivePeersCount() int {
 func (p *Pbft) StartServer() {
 	if p.network != nil {
 		p.network.Start()
+		fmt.Println("Pbft StartServer>>>>")
 		p.Recover()
 	}
 }
@@ -805,9 +809,14 @@ func (p *Pbft) Recover() {
 		return
 	}
 	p.isRecovering = true
+	minCount := p.dispatcher.GetConsensusView().GetMajorityCount()
+	if p.timeSource.AdjustedTime().Unix() < p.cfg.BPosFullVoteTime {
+		minCount = p.dispatcher.GetConsensusView().GetMinAcceptVoteCount()
+	}
 	for {
-		if p.IsCurrent() && len(p.network.GetActivePeers()) > 0 &&
-			p.dispatcher.GetConsensusView().HasProducerMajorityCount(len(p.network.GetActivePeers())) {
+		activePeersCount := len(p.network.GetActivePeers())
+		if p.IsCurrent() && activePeersCount > 0 &&
+			activePeersCount > minCount {
 			log.Info("----- PostRecoverTask --------", "GetActivePeers", len(p.network.GetActivePeers()), "total", len(p.dispatcher.GetConsensusView().GetProducers()))
 			p.network.PostRecoverTask()
 			p.isRecovering = false
@@ -847,7 +856,7 @@ func (p *Pbft) broadConfirmMsg(confirm *payload.Confirm, height uint64) {
 func (p *Pbft) verifyConfirm(confirm *payload.Confirm, elaHeight uint64) error {
 	minSignCount := 0
 	if elaHeight == 0 {
-		minSignCount = p.dispatcher.GetConsensusView().GetMinAcceptVoteCount()
+		minSignCount = p.dispatcher.GetConsensusView().GetCRMajorityCount()
 	} else {
 		_, count, err := spv.GetProducers(elaHeight)
 		if err != nil {

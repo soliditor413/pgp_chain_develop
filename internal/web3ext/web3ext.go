@@ -164,6 +164,10 @@ web3._extend({
 			name: 'getAllPeersInfo',
 			call: 'pbft_getAllPeersInfo',
 		}),
+		new web3._extend.Method({
+			name: 'getActivePeers',
+			call: 'pbft_getActivePeers',
+		}),
 	],
 	properties: [
 		new web3._extend.Property({

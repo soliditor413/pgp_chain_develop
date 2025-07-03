@@ -6,6 +6,7 @@
 package pbft
 
 import (
+	"github.com/elastos/Elastos.ELA/dpos/p2p"
 	"github.com/pgprotocol/pgp-chain/common"
 	"github.com/pgprotocol/pgp-chain/consensus"
 	"github.com/pgprotocol/pgp-chain/dpos"
@@ -42,6 +43,10 @@ func (a *API) GetAllPeersInfo() []peerInfo {
 		})
 	}
 	return result
+}
+
+func (a *API) GetActivePeers() []p2p.Peer {
+	return a.pbft.network.GetActivePeers()
 }
 
 func (a *API) Dispatcher() *dpos.Dispatcher {
