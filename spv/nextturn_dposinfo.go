@@ -22,7 +22,7 @@ var (
 )
 
 const (
-	CURRENT_CRC_PRODUCERS = "current_crc_producers"
+	CURRENT_PRODUCERS = "current_producers"
 )
 
 func GetTotalProducersCount() int {
@@ -55,7 +55,7 @@ func GetProducers(elaHeight uint64) ([][]byte, int, error) {
 		return producers, totalCount, errors.New("spv is not start")
 	}
 	if GetCurrentConsensusMode() == spv.POW {
-		producers = GetCurrentCRProducers()
+		producers = GetCurrentProducers()
 		totalCount = len(producers)
 		return producers, totalCount, nil
 	}
@@ -70,6 +70,11 @@ func GetProducers(elaHeight uint64) ([][]byte, int, error) {
 	}
 
 	for _, arbiter := range crcArbiters {
+		if len(arbiter) > 0 && bytes.Compare(zero, arbiter) != 0 {
+			producers = append(producers, arbiter)
+		}
+	}
+	for _, arbiter := range normalArbitrs {
 		if len(arbiter) > 0 && bytes.Compare(zero, arbiter) != 0 {
 			producers = append(producers, arbiter)
 		}
@@ -100,31 +105,25 @@ func GetWorkingHeight() uint32 {
 	return 0
 }
 
-func SetCurrentCRProducers() {
+func SetCurrentProducers(producers [][]byte) {
 	if spvTransactiondb == nil {
 		return
 	}
 	transactionDBMutex.Lock()
 	defer transactionDBMutex.Unlock()
 	b := new(bytes.Buffer)
-	bestSpvHeight := GetSpvHeight()
-	crcArbiters, _, err := SpvService.GetArbiters(uint32(bestSpvHeight))
-	if err != nil {
-		log.Error("[SetCurrentCRProducers] GetArbiters error", "error", err)
-		return
-	}
-	count := len(crcArbiters)
+	count := len(producers)
 	if count == 0 {
 		log.Error("not SetCurrentCRProducers crc arbitrator is empty")
 		return
 	}
-	err = elacom.WriteVarUint(b, uint64(count))
+	err := elacom.WriteVarUint(b, uint64(count))
 	if err != nil {
 		log.Error("[SetCurrentCRProducers]write count error", "error", err)
 		return
 	}
 
-	for _, arbiter := range crcArbiters {
+	for _, arbiter := range producers {
 		if len(arbiter) > 0 && bytes.Compare(zero, arbiter) != 0 {
 			err = elacom.WriteVarBytes(b, arbiter)
 			if err != nil {
@@ -134,20 +133,20 @@ func SetCurrentCRProducers() {
 		}
 	}
 
-	err = spvTransactiondb.Put([]byte(CURRENT_CRC_PRODUCERS), b.Bytes())
+	err = spvTransactiondb.Put([]byte(CURRENT_PRODUCERS), b.Bytes())
 	if err != nil {
 		log.Error("[setCurrentCRProducers] write db error", "error", err)
 		return
 	}
 }
 
-func GetCurrentCRProducers() [][]byte {
+func GetCurrentProducers() [][]byte {
 	if spvTransactiondb == nil {
 		return nil
 	}
 	transactionDBMutex.Lock()
 	defer transactionDBMutex.Unlock()
-	b, err := spvTransactiondb.Get([]byte(CURRENT_CRC_PRODUCERS))
+	b, err := spvTransactiondb.Get([]byte(CURRENT_PRODUCERS))
 	if err != nil {
 		log.Error("[GetCurrentCRProducers] read db error", "error", err)
 		return nil
@@ -155,7 +154,7 @@ func GetCurrentCRProducers() [][]byte {
 	if b == nil {
 		return nil
 	}
-	crcArbiters := make([][]byte, 0)
+	producers := make([][]byte, 0)
 	count, err := elacom.ReadVarUint(bytes.NewReader(b), 0)
 	for i := 0; i < int(count); i++ {
 		arbiter, err := elacom.ReadVarBytes(bytes.NewReader(b), 33, "arbiter")
@@ -164,10 +163,10 @@ func GetCurrentCRProducers() [][]byte {
 			return nil
 		}
 		if len(arbiter) > 0 && bytes.Compare(zero, arbiter) != 0 {
-			crcArbiters = append(crcArbiters, arbiter)
+			producers = append(producers, arbiter)
 		}
 	}
-	return crcArbiters
+	return producers
 }
 
 func BroadInitCurrentProducers() bool {

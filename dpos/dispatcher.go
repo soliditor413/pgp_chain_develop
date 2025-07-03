@@ -33,8 +33,9 @@ type Dispatcher struct {
 	consensusView      *ConsensusView
 	timeSource         dtime.MedianTimeSource
 
-	onConfirm func(confirm *payload.Confirm) error
-	unConfirm func(confirm *payload.Confirm) error
+	onConfirm             func(confirm *payload.Confirm) error
+	unConfirm             func(confirm *payload.Confirm) error
+	checkBPosFullVoteFork func(count int) bool
 
 	proposalProcessFinished bool
 	finishedHeight          uint64
@@ -167,8 +168,9 @@ func (d *Dispatcher) processVote(vote *payload.DPOSProposalVote) (succeed bool, 
 
 	if vote.Accept {
 		d.acceptVotes[vote.Hash()] = vote
-		Info("acceptVotes count:", len(d.acceptVotes))
-		if d.consensusView.IsMajorityAgree(len(d.acceptVotes)) {
+		acceptCount := len(d.acceptVotes)
+		Info("acceptVotes count:", acceptCount)
+		if d.consensusView.IsMajorityAgree(acceptCount) || (d.checkBPosFullVoteFork != nil && d.checkBPosFullVoteFork(acceptCount)) {
 			Info("Collect majority signs. Proposal confirmed.")
 			confirm := d.createConfirm()
 			if confirm != nil {
@@ -516,16 +518,17 @@ func (d *Dispatcher) GetNowTime() time.Time {
 }
 
 func NewDispatcher(producers [][]byte, onConfirm func(confirm *payload.Confirm) error,
-	unConfirm func(confirm *payload.Confirm) error, tolerance time.Duration, publicKey []byte,
+	unConfirm func(confirm *payload.Confirm) error, checkBPosFullVoteFork func(count int) bool, tolerance time.Duration, publicKey []byte,
 	medianTime dtime.MedianTimeSource, viewListener ViewListener, dposStartHeight uint64) *Dispatcher {
 	return &Dispatcher{
-		acceptVotes:         make(map[common.Uint256]*payload.DPOSProposalVote),
-		rejectedVotes:       make(map[common.Uint256]*payload.DPOSProposalVote),
-		pendingVotes:        make(map[common.Uint256]*payload.DPOSProposalVote),
-		precociousProposals: make(map[common.Uint256]*payload.DPOSProposal),
-		consensusView:       NewConsensusView(tolerance, publicKey, NewProducers(producers, dposStartHeight), viewListener),
-		onConfirm:           onConfirm,
-		unConfirm:           unConfirm,
-		timeSource:          medianTime,
+		acceptVotes:           make(map[common.Uint256]*payload.DPOSProposalVote),
+		rejectedVotes:         make(map[common.Uint256]*payload.DPOSProposalVote),
+		pendingVotes:          make(map[common.Uint256]*payload.DPOSProposalVote),
+		precociousProposals:   make(map[common.Uint256]*payload.DPOSProposal),
+		consensusView:         NewConsensusView(tolerance, publicKey, NewProducers(producers, dposStartHeight), viewListener),
+		onConfirm:             onConfirm,
+		unConfirm:             unConfirm,
+		checkBPosFullVoteFork: checkBPosFullVoteFork,
+		timeSource:            medianTime,
 	}
 }

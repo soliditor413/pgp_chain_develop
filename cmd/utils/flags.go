@@ -814,10 +814,11 @@ var (
 		Usage: "config the frozen account list",
 		Value: &cli.StringSlice{},
 	}
-	//xxl add update Arbiter List To Layer1 define param
-	UpdateArbiterListToLayer1Flag = cli.BoolFlag{
-		Name:  "updateArbiterListToLayer1",
-		Usage: "add data feed node for abiter reading",
+
+	BPosFullVoteTime = cli.Uint64Flag{
+		Name:  "bpos.fullVote.time",
+		Usage: "BPos consensus full node vote time",
+		Value: 1769930819,
 	}
 
 	PledgedBillContract = cli.StringFlag{
@@ -1627,6 +1628,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 
 	cfg.DynamicArbiterHeight = ctx.GlobalUint64(DynamicArbiter.Name)
 	cfg.PledgedBillContract = ctx.GlobalString(PledgedBillContract.Name)
+	cfg.BPosFullVoteTime = ctx.GlobalInt64(BPosFullVoteTime.Name)
 	listAccount, err := MakeDeveloperFeeContractAddress(ctx)
 	if err != nil {
 		log.Error("MakeDeveloperFeeContractAddress failed", "error", err)

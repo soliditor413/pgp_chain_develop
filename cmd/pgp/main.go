@@ -181,7 +181,7 @@ var (
 		utils.PbftMinerAddress,
 		utils.DynamicArbiter,
 		utils.FrozenAccount,
-		utils.UpdateArbiterListToLayer1Flag,
+		utils.BPosFullVoteTime,
 		utils.PledgedBillContract,
 		utils.DeveloperFeeContract,
 	}
@@ -524,8 +524,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 			utils.Fatalf("Ethereum service not running: %v", err)
 		}
 		initChainBridge(ctx, stack, ethereum.BlockChain())
-
-		eth.NewBposNetwork(ethereum.BlockChain().GetDposEngine().(*pbft.Pbft)).Start()
+		//eth.NewBposNetwork(ethereum.BlockChain().GetDposEngine().(*pbft.Pbft)).Start()
 	}
 	//start the SPV service
 	//log.Info(fmt.Sprintf("Starting SPV service with config: %+v \n", *spvCfg))
@@ -642,14 +641,6 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 			}
 		}
 		//go startLayer2(ethereum.BlockChain())
-	}
-
-	//xxl add update Arbiter List To Layer1 get param
-	isUpdateAbiterToLayer1 := ctx.GlobalBool(utils.UpdateArbiterListToLayer1Flag.Name)
-	log.Info("xxl isUpdateAbiterToLayer1 flag is ", "isUpdateAbiterToLayer1", isUpdateAbiterToLayer1)
-	if isUpdateAbiterToLayer1 {
-		log.Info("xxl StartUpdateNode ")
-		chainbridge_core.StartUpdateNode()
 	}
 }
 

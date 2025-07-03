@@ -498,6 +498,7 @@ type PbftConfig struct {
 	MaxPerLogSize     int64    `json:"maxperlogsize"`
 	MaxNodePerHost    uint32   `json:"maxnodeperhost"` //MaxNodePerHost defines max nodes that one host can establish.
 	DPoSV2StartHeight uint32   `json:"dposv2startheight"`
+	BPosFullVoteTime  int64    `json:"bposfullvotetime"` //BPosFullNodeTime defines the time of to collected full vote
 	NodeVersion       string
 }
 

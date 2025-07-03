@@ -54,7 +54,7 @@ func (n *BposNetwork) turnToDposConsensus() {
 
 // checkNetwork checks the number of connected peers, if the number of unconnected peers exceeds 1/3 of the total number of peers, it will turn to CR Consensus.
 func (n *BposNetwork) checkNetwork() {
-	peers := n.engine.GetAtbiterPeersInfo()
+	peers := n.engine.GetArbiterPeersInfo()
 	total := n.engine.GetTotalArbitersCount()
 	noneConnecttedCount := 0
 	for _, peer := range peers {

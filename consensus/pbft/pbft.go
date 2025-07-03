@@ -211,9 +211,27 @@ func New(chainConfig *params.ChainConfig, dataDir string) *Pbft {
 		pbft.network = network
 		pbft.subscribeEvent()
 	}
-	pbft.dispatcher = dpos.NewDispatcher(producers, pbft.onConfirm, pbft.onUnConfirm,
+	pbft.dispatcher = dpos.NewDispatcher(producers, pbft.onConfirm, pbft.onUnConfirm, pbft.checkBPosFullVoteFork,
 		10*time.Second, accpubkey, medianTimeSouce, pbft, chainConfig.GetPbftBlock())
 	return pbft
+}
+
+func (p *Pbft) checkBPosFullVoteFork(count int) bool {
+	fmt.Println("p.cfg.BPosFullVoteTime  ", p.cfg.BPosFullVoteTime)
+	if p.timeSource.AdjustedTime().Unix() > p.cfg.BPosFullVoteTime {
+		return false
+	}
+	peers := p.GetArbiterPeersInfo()
+	connectedCount := 0
+	for _, p := range peers {
+		if p.ConnState == "2WayConnection" {
+			connectedCount++
+		}
+	}
+	if p.dispatcher.GetConsensusView().HasProducerMajorityCount(connectedCount) {
+		return false
+	}
+	return count >= p.dispatcher.GetConsensusView().GetCRMajorityCount()
 }
 
 func (p *Pbft) GetMainChainHeight(pid peer.PID) uint64 {
@@ -836,6 +854,11 @@ func (p *Pbft) verifyConfirm(confirm *payload.Confirm, elaHeight uint64) error {
 			return err
 		}
 		minSignCount = p.dispatcher.GetConsensusView().GetMajorityCountByTotalSigners(count)
+	}
+	if len(confirm.Votes) < minSignCount {
+		if p.timeSource.AdjustedTime().Unix() <= p.cfg.BPosFullVoteTime-5 {
+			minSignCount = p.dispatcher.GetConsensusView().GetCRMajorityCount()
+		}
 	}
 	err := dpos.CheckConfirm(confirm, minSignCount)
 	return err

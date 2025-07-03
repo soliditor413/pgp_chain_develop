@@ -158,7 +158,7 @@ web3._extend({
 		}),
 	    new web3._extend.Method({
 			name: 'getArbiterPeersInfo',
-			call: 'pbft_getAtbiterPeersInfo',
+			call: 'pbft_getArbiterPeersInfo',
 		}),
 		new web3._extend.Method({
 			name: 'getAllPeersInfo',

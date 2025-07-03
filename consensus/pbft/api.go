@@ -25,8 +25,8 @@ func (a *API) AnnounceDAddr() uint64 {
 	return 0
 }
 
-func (a *API) GetAtbiterPeersInfo() []peerInfo {
-	return a.pbft.GetAtbiterPeersInfo()
+func (a *API) GetArbiterPeersInfo() []peerInfo {
+	return a.pbft.GetArbiterPeersInfo()
 }
 
 func (a *API) GetAllPeersInfo() []peerInfo {

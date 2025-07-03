@@ -107,7 +107,7 @@ type peerInfo struct {
 	NodeVersion    string `json:"nodeversion"`
 }
 
-func (p *Pbft) GetAtbiterPeersInfo() []peerInfo {
+func (p *Pbft) GetArbiterPeersInfo() []peerInfo {
 	if p.account == nil {
 		return nil
 	}
@@ -153,6 +153,7 @@ func (p *Pbft) AnnounceDAddr() bool {
 
 func (p *Pbft) UpdateCurrentProducers(producers [][]byte, totalCount int, spvHeight uint64) {
 	p.dispatcher.GetConsensusView().UpdateProducers(producers, totalCount, spvHeight)
+	spv.SetCurrentProducers(producers)
 }
 
 func (p *Pbft) GetCurrentProducers() [][]byte {
@@ -277,6 +278,7 @@ func (p *Pbft) OnInsertBlock(block *types.Block) bool {
 			go p.AnnounceDAddr()
 			go p.Recover()
 			p.dispatcher.GetConsensusView().DumpInfo()
+			spv.SetCurrentProducers(p.GetCurrentProducers())
 		} else {
 			log.Info("For the same batch of producers, no need to change current producers")
 		}
