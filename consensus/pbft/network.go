@@ -269,7 +269,7 @@ func (p *Pbft) OnInsertBlock(block *types.Block) bool {
 	}
 	dutyIndex := p.dispatcher.GetConsensusView().GetDutyIndex()
 	isWorkingHeight := spv.SpvIsWorkingHeight()
-	log.Info("[OnInsertBlock]", "dutyIndex", dutyIndex, "isWorkingHeight", isWorkingHeight)
+	log.Info("[OnInsertBlock]", "dutyIndex", dutyIndex, "isWorkingHeight", isWorkingHeight, " block.Nonce ", block.Nonce())
 	if dutyIndex == 0 && isWorkingHeight {
 		curProducers := p.dispatcher.GetConsensusView().GetProducers()
 		isSame := p.dispatcher.GetConsensusView().IsSameProducers(curProducers)
