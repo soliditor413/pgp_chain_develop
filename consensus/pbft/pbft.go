@@ -118,13 +118,14 @@ type Pbft struct {
 	statusMap          map[uint32]map[string]*dmsg.ConsensusStatus
 	notHandledProposal map[string]struct{}
 
-	enableViewLoop bool
-	recoverStarted bool
-	isRecoved      bool
-	period         uint64
-	isSealOver     bool
-	isRecovering   bool
-	isSealing      int32
+	enableViewLoop              bool
+	recoverStarted              bool
+	isRecoved                   bool
+	period                      uint64
+	isSealOver                  bool
+	isRecovering                bool
+	isSealing                   int32
+	needChangeNextTurnProducers bool
 }
 
 func New(chainConfig *params.ChainConfig, dataDir string) *Pbft {
@@ -274,6 +275,13 @@ func (p *Pbft) subscribeEvent() {
 						log.Info("For the same batch of aribters, no need to re-connect direct net")
 					}
 				}
+			}
+			if p.needChangeNextTurnProducers {
+				if spv.SpvIsWorkingHeight() {
+					p.changeNextTurnProduces(spv.GetSpvHeight() + 1)
+					p.needChangeNextTurnProducers = false
+				}
+
 			}
 		case dpos.ETSmallCroTx:
 			if croTx, ok := e.Data.(*smallcrosstx.ETSmallCrossTx); ok {

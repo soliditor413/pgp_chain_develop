@@ -91,6 +91,8 @@ type NetworkEventListener interface {
 	OnFailedWithdrawTxReceived(id dpeer.PID, c *dmsg.FailedWithdrawTx)
 
 	OnLayer2Msg(id dpeer.PID, c elap2p.Message)
+
+	OnProducersMsg(msg *dmsg.ProducersMsg)
 }
 
 type messageItem struct {
@@ -280,6 +282,11 @@ func (n *Network) processMessage(msgItem *messageItem) {
 		if processed {
 			n.listener.OnResponseResetViewReceived(msgI)
 		}
+	case dpos_msg.CmdProducers:
+		msg, processed := m.(*dmsg.ProducersMsg)
+		if processed {
+			n.listener.OnProducersMsg(msg)
+		}
 	}
 }
 
@@ -434,6 +441,8 @@ func createMessage(hdr elap2p.Header, r net.Conn) (message elap2p.Message, err e
 		message = &dpos_msg.FeedBackArbitersSignature{}
 	case msg.CmdResetConsensusView:
 		message = &msg.ResetView{}
+	case dpos_msg.CmdProducers:
+		message = &dmsg.ProducersMsg{}
 	default:
 		return nil, errors.New("Received unsupported message, CMD " + hdr.GetCMD())
 	}

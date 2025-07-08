@@ -99,6 +99,13 @@ func (p *Pbft) BroadMessageToPeers(msg elap2p.Message, peers [][]byte) {
 	}
 }
 
+func (p *Pbft) BroadMessageToAllPeers(msg elap2p.Message) {
+	peers := p.GetAllArbiterPeersInfo()
+	for _, node := range peers {
+		p.network.SendMessageToPeer(node.PID, msg)
+	}
+}
+
 type peerInfo struct {
 	OwnerPublicKey string `json:"ownerpublickey"`
 	NodePublicKey  string `json:"nodepublickey"`
@@ -263,6 +270,11 @@ func (p *Pbft) AccessFutureBlock(parent *types.Block) {
 	}
 }
 
+func (p *Pbft) broadChangeProducersMsg(changeHeight uint64) {
+	producerMsg := dmsg.NewProducersMsg(spv.GetSpvHeight(), changeHeight, p.GetCurrentProducers())
+	p.BroadMessageToAllPeers(producerMsg)
+}
+
 func (p *Pbft) OnInsertBlock(block *types.Block) bool {
 	if p.dispatcher == nil {
 		return false
@@ -274,11 +286,8 @@ func (p *Pbft) OnInsertBlock(block *types.Block) bool {
 		curProducers := p.dispatcher.GetConsensusView().GetProducers()
 		isSame := p.dispatcher.GetConsensusView().IsSameProducers(curProducers)
 		if !isSame {
-			p.dispatcher.GetConsensusView().ChangeCurrentProducers(block.NumberU64()+1, spv.GetSpvHeight())
-			go p.AnnounceDAddr()
-			go p.Recover()
-			p.dispatcher.GetConsensusView().DumpInfo()
-			spv.SetCurrentProducers(p.GetCurrentProducers())
+			p.changeNextTurnProduces(block.NumberU64() + 1)
+			p.broadChangeProducersMsg(block.NumberU64() + 1)
 		} else {
 			log.Info("For the same batch of producers, no need to change current producers")
 		}
@@ -306,6 +315,14 @@ func (p *Pbft) OnInsertBlock(block *types.Block) bool {
 		}
 	}
 	return false
+}
+
+func (p *Pbft) changeNextTurnProduces(changeHeight uint64) {
+	p.dispatcher.GetConsensusView().ChangeCurrentProducers(changeHeight, spv.GetSpvHeight())
+	go p.AnnounceDAddr()
+	go p.Recover()
+	p.dispatcher.GetConsensusView().DumpInfo()
+	spv.SetCurrentProducers(p.GetCurrentProducers())
 }
 
 func (p *Pbft) GetSelfDutyIndex() int {
@@ -823,5 +840,20 @@ func (p *Pbft) OnFailedWithdrawTxReceived(id peer.PID, msg *dmsg.FailedWithdrawT
 	err := withdrawfailedtx.ReceivedFailedWithdrawTx(msg.GetHash(), msg.GetSignature())
 	if err != nil {
 		log.Error("ReceivedFailedWithdrawTx", "error", err)
+	}
+}
+
+func (p *Pbft) OnProducersMsg(msg *dmsg.ProducersMsg) {
+	currentProducers := msg.Producers
+	if msg.SpvHeight > spv.GetSpvHeight() {
+		p.needChangeNextTurnProducers = true
+		return
+	}
+	p.needChangeNextTurnProducers = false
+	if p.IsCurrentProducers(currentProducers) {
+		return
+	}
+	if p.IsSameProducers(currentProducers) {
+		p.changeNextTurnProduces(msg.ChangeHeight)
 	}
 }
