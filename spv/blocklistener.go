@@ -2,6 +2,7 @@ package spv
 
 import (
 	"bytes"
+	"sync/atomic"
 
 	spv "github.com/elastos/Elastos.ELA.SPV/interface"
 	"github.com/elastos/Elastos.ELA.SPV/util"
@@ -33,6 +34,10 @@ type BlockListener struct {
 	param                auxParam
 	handle               func(block interface{}) error
 	dynamicArbiterHeight uint64
+}
+
+func (l *BlockListener) GetDynamicArbiterHeight() uint64 {
+	return atomic.LoadUint64(&l.dynamicArbiterHeight)
 }
 
 func (l *BlockListener) NotifyBlock(block *util.Block, isCurrent bool) {
@@ -152,6 +157,11 @@ func IsNexturnBlock(block interface{}) bool {
 }
 
 func InitNextTurnDposInfo() {
+	dynamicArbiterHeight := SpvService.GetBlockListener().(*BlockListener).GetDynamicArbiterHeight()
+	if uint64(SpvService.GetBlockListener().BlockHeight()) < dynamicArbiterHeight {
+		log.Info("init next turn dpos info error", "height", SpvService.GetBlockListener().BlockHeight(), "dynamicArbiterHeight", dynamicArbiterHeight)
+		return
+	}
 	workingHeight, crcArbiters, normalArbiters, err := SpvService.GetNextArbiters()
 	if err != nil {
 		log.Error("GetNextArbiters error", "err", err.Error())
