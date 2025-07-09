@@ -155,9 +155,10 @@ func GetCurrentProducers() [][]byte {
 		return nil
 	}
 	producers := make([][]byte, 0)
-	count, err := elacom.ReadVarUint(bytes.NewReader(b), 0)
+	reader := bytes.NewReader(b)
+	count, err := elacom.ReadVarUint(reader, 0)
 	for i := 0; i < int(count); i++ {
-		arbiter, err := elacom.ReadVarBytes(bytes.NewReader(b), 33, "arbiter")
+		arbiter, err := elacom.ReadVarBytes(reader, 33, "arbiter")
 		if err != nil {
 			log.Error("[GetCurrentCRProducers] read arbiter error", "error", err)
 			return nil
