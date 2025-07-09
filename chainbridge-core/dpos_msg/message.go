@@ -5,5 +5,5 @@ const (
 	CmdRequireArbiters          = "req_arbiter"
 	CmdRequireArbitersSignature = "req_a_sig"
 	CmdFeedbackArbiterSignature = "ret_a_sig"
-	CmdProducers                = "cmd_producers"
+	CmdProducers                = "producers"
 )

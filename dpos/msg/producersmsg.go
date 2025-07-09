@@ -42,7 +42,7 @@ func (msg *ProducersMsg) MaxLength() uint32 {
 	if err != nil {
 		return 0
 	}
-	return uint32(buf.Len())
+	return uint32(len(buf.Bytes()) + 10)
 }
 
 func (msg *ProducersMsg) Serialize(w io.Writer) error {
