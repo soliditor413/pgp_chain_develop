@@ -513,7 +513,9 @@ func (p *Pbft) OnVoteAccepted(id peer.PID, vote *payload.DPOSProposalVote) {
 		return
 	}
 	if vote.Accept == true {
-		dpos.Info("OnVoteAccepted:", "hash:", vote.Hash().String())
+		dpos.Info("OnVoteAccepted:", "hash:", vote.Hash().String(), "from", id.String())
+	} else {
+		dpos.Info("OnVoteRejected:", "hash:", vote.Hash().String(), "from ", id.String())
 	}
 	if p.dispatcher.GetFinishedProposal().IsEqual(vote.ProposalHash) {
 		dpos.Info("all ready finished proposal, no need vote")
@@ -591,10 +593,12 @@ func (p *Pbft) OnRecover() {
 
 func (p *Pbft) GetMinAcceptVoteCount() int {
 	if p.timeSource.AdjustedTime().Unix() < p.cfg.BPosFullVoteTime {
+		if p.hasPeersMajorityCount() {
+			return p.dispatcher.GetConsensusView().GetMajorityCount()
+		}
 		return p.dispatcher.GetConsensusView().GetMinAcceptVoteCount()
 	}
 	return p.dispatcher.GetConsensusView().GetMajorityCount()
-
 }
 
 func (p *Pbft) recoverAbnormalState() bool {
@@ -605,6 +609,7 @@ func (p *Pbft) recoverAbnormalState() bool {
 	if producers := p.dispatcher.GetConsensusView().GetProducers(); len(producers) > 0 {
 		if peers := p.network.GetActivePeers(); len(peers) < minCount {
 			log.Error("[recoverAbnormalState] can not find active peer", "minCount", minCount, "peers.size", len(peers))
+			p.Recover()
 			return false
 		}
 		p.recoverStarted = true

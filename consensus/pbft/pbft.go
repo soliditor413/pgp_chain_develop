@@ -222,6 +222,13 @@ func (p *Pbft) checkBPosFullVoteFork(count int) bool {
 	if p.timeSource.AdjustedTime().Unix() > p.cfg.BPosFullVoteTime {
 		return false
 	}
+	if p.hasPeersMajorityCount() {
+		return true
+	}
+	return count >= p.dispatcher.GetConsensusView().GetMinAcceptVoteCount()
+}
+
+func (p *Pbft) hasPeersMajorityCount() bool {
 	peers := p.GetArbiterPeersInfo()
 	connectedCount := 0
 	for _, p := range peers {
@@ -229,10 +236,7 @@ func (p *Pbft) checkBPosFullVoteFork(count int) bool {
 			connectedCount++
 		}
 	}
-	if p.dispatcher.GetConsensusView().HasProducerMajorityCount(connectedCount) {
-		return false
-	}
-	return count >= p.dispatcher.GetConsensusView().GetMinAcceptVoteCount()
+	return p.dispatcher.GetConsensusView().HasProducerMajorityCount(connectedCount)
 }
 
 func (p *Pbft) GetMainChainHeight(pid peer.PID) uint64 {
@@ -819,12 +823,17 @@ func (p *Pbft) Recover() {
 	p.isRecovering = true
 	minCount := p.dispatcher.GetConsensusView().GetMajorityCount()
 	if p.timeSource.AdjustedTime().Unix() < p.cfg.BPosFullVoteTime {
-		minCount = p.dispatcher.GetConsensusView().GetMinAcceptVoteCount()
+		if p.GetBlockChain().CurrentHeader().Nonce.Uint64() != 0 {
+			if !p.hasPeersMajorityCount() {
+				minCount = p.dispatcher.GetConsensusView().GetMinAcceptVoteCount()
+			}
+		}
 	}
 	for {
 		activePeersCount := len(p.network.GetActivePeers())
+		fmt.Println("activePeersCount", activePeersCount, " minCount", minCount)
 		if p.IsCurrent() && activePeersCount > 0 &&
-			activePeersCount > minCount {
+			activePeersCount/2 >= minCount {
 			log.Info("----- PostRecoverTask --------", "GetActivePeers", len(p.network.GetActivePeers()), "total", len(p.dispatcher.GetConsensusView().GetProducers()))
 			p.network.PostRecoverTask()
 			p.isRecovering = false
