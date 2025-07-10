@@ -844,6 +844,7 @@ func (p *Pbft) OnFailedWithdrawTxReceived(id peer.PID, msg *dmsg.FailedWithdrawT
 }
 
 func (p *Pbft) OnProducersMsg(msg *dmsg.ProducersMsg) {
+	fmt.Println(">>>>> OnProducersMsg <<<<<<", "msg ", msg.CMD())
 	currentProducers := msg.Producers
 	if msg.SpvHeight > spv.GetSpvHeight() {
 		p.needChangeNextTurnProducers = true
