@@ -6,7 +6,6 @@
 package msg
 
 import (
-	"bytes"
 	"io"
 
 	"github.com/elastos/Elastos.ELA/common"
@@ -37,12 +36,7 @@ func (msg *ProducersMsg) CMD() string {
 }
 
 func (msg *ProducersMsg) MaxLength() uint32 {
-	buf := new(bytes.Buffer)
-	err := msg.Serialize(buf)
-	if err != nil {
-		return 0
-	}
-	return uint32(len(buf.Bytes()) + 10)
+	return 8 + 8 + 8 + (36 * 35)
 }
 
 func (msg *ProducersMsg) Serialize(w io.Writer) error {
