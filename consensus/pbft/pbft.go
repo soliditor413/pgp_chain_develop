@@ -223,7 +223,7 @@ func (p *Pbft) checkBPosFullVoteFork(count int) bool {
 		return false
 	}
 	if p.hasPeersMajorityCount() {
-		return true
+		return p.dispatcher.GetConsensusView().IsMajorityAgree(count)
 	}
 	return count >= p.dispatcher.GetConsensusView().GetMinAcceptVoteCount()
 }
