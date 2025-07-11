@@ -230,7 +230,7 @@ func (p *Pbft) checkBPosFullVoteFork(count int) bool {
 
 func (p *Pbft) hasPeersMajorityCount() bool {
 	peers := p.GetArbiterPeersInfo()
-	connectedCount := 0
+	connectedCount := 1
 	for _, p := range peers {
 		if p.ConnState == "2WayConnection" {
 			connectedCount++
