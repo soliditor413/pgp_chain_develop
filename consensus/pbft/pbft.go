@@ -236,6 +236,7 @@ func (p *Pbft) hasPeersMajorityCount() bool {
 			connectedCount++
 		}
 	}
+	fmt.Println("connectedCount ", connectedCount)
 	return p.dispatcher.GetConsensusView().HasProducerMajorityCount(connectedCount)
 }
 
@@ -822,14 +823,13 @@ func (p *Pbft) Recover() {
 	}
 	p.isRecovering = true
 	minCount := p.dispatcher.GetConsensusView().GetMajorityCount()
-	if p.timeSource.AdjustedTime().Unix() < p.cfg.BPosFullVoteTime {
-		if p.GetBlockChain().CurrentHeader().Nonce.Uint64() != 0 {
+
+	for {
+		if p.timeSource.AdjustedTime().Unix() < p.cfg.BPosFullVoteTime {
 			if !p.hasPeersMajorityCount() {
 				minCount = p.dispatcher.GetConsensusView().GetMinAcceptVoteCount()
 			}
 		}
-	}
-	for {
 		activePeersCount := len(p.network.GetActivePeers())
 		fmt.Println("activePeersCount", activePeersCount, " minCount", minCount)
 		if p.IsCurrent() && activePeersCount > 0 &&
