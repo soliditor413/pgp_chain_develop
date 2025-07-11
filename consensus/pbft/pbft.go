@@ -222,22 +222,17 @@ func (p *Pbft) checkBPosFullVoteFork(count int) bool {
 	if p.timeSource.AdjustedTime().Unix() > p.cfg.BPosFullVoteTime {
 		return false
 	}
-	if p.hasPeersMajorityCount() {
+	_, res := p.hasPeersMajorityCount()
+	if res {
 		return p.dispatcher.GetConsensusView().IsMajorityAgree(count)
 	}
 	return count >= p.dispatcher.GetConsensusView().GetMinAcceptVoteCount()
 }
 
-func (p *Pbft) hasPeersMajorityCount() bool {
-	peers := p.GetArbiterPeersInfo()
-	connectedCount := 1
-	for _, p := range peers {
-		if p.ConnState == "2WayConnection" {
-			connectedCount++
-		}
-	}
+func (p *Pbft) hasPeersMajorityCount() (int, bool) {
+	connectedCount := p.GetActivePeersCount()
 	fmt.Println("connectedCount ", connectedCount)
-	return p.dispatcher.GetConsensusView().HasProducerMajorityCount(connectedCount)
+	return connectedCount, p.dispatcher.GetConsensusView().HasProducerMajorityCount(connectedCount)
 }
 
 func (p *Pbft) GetMainChainHeight(pid peer.PID) uint64 {
@@ -772,7 +767,14 @@ func (p *Pbft) AddDirectLinkPeer(pid peer.PID, addr string) {
 
 func (p *Pbft) GetActivePeersCount() int {
 	if p.network != nil {
-		return len(p.network.GetActivePeers())
+		peers := p.GetArbiterPeersInfo()
+		connectedCount := 1 // self
+		for _, p := range peers {
+			if p.ConnState == "2WayConnection" {
+				connectedCount++
+			}
+		}
+		return connectedCount
 	}
 	return 0
 }
@@ -823,17 +825,18 @@ func (p *Pbft) Recover() {
 	}
 	p.isRecovering = true
 	minCount := p.dispatcher.GetConsensusView().GetMajorityCount()
-
+	activePeersCount := 0
+	res := false
 	for {
 		if p.timeSource.AdjustedTime().Unix() < p.cfg.BPosFullVoteTime {
-			if !p.hasPeersMajorityCount() {
+			activePeersCount, res = p.hasPeersMajorityCount()
+			if !res {
 				minCount = p.dispatcher.GetConsensusView().GetMinAcceptVoteCount()
 			}
 		}
-		activePeersCount := len(p.network.GetActivePeers())
 		fmt.Println("activePeersCount", activePeersCount, " minCount", minCount)
 		if p.IsCurrent() && activePeersCount > 0 &&
-			activePeersCount/2 >= minCount {
+			activePeersCount >= minCount {
 			log.Info("----- PostRecoverTask --------", "GetActivePeers", len(p.network.GetActivePeers()), "total", len(p.dispatcher.GetConsensusView().GetProducers()))
 			p.network.PostRecoverTask()
 			p.isRecovering = false

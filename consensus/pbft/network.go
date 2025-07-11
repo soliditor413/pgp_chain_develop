@@ -593,7 +593,8 @@ func (p *Pbft) OnRecover() {
 
 func (p *Pbft) GetMinAcceptVoteCount() int {
 	if p.timeSource.AdjustedTime().Unix() < p.cfg.BPosFullVoteTime {
-		if p.hasPeersMajorityCount() {
+		_, res := p.hasPeersMajorityCount()
+		if res {
 			return p.dispatcher.GetConsensusView().GetMajorityCount()
 		}
 		return p.dispatcher.GetConsensusView().GetMinAcceptVoteCount()
