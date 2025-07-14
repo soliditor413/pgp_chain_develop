@@ -19,11 +19,11 @@ import (
 )
 
 type BlockNonce [8]byte
+
 // Uint64 returns the integer value of a block nonce.
 func (n BlockNonce) Uint64() uint64 {
 	return binary.BigEndian.Uint64(n[:])
 }
-
 
 type mockHeader struct {
 	ParentHash common.Uint256
@@ -80,7 +80,7 @@ func (b *mockBlock) GetHeight() uint64 {
 	return b.header.Height
 }
 
-func verifyConfirm(confirm *payload.Confirm, elaHeight uint64) error {
+func verifyConfirm(confirm *payload.Confirm, elaHeight uint64, timestamp int64) error {
 	return nil
 }
 

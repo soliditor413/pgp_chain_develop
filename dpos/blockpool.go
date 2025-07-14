@@ -21,6 +21,7 @@ type DBlock interface {
 	GetHash() common.Uint256
 	GetHeight() uint64
 	Nonce() uint64
+	Time() uint64
 }
 
 type ConfirmInfo struct {
@@ -35,14 +36,14 @@ type BlockPool struct {
 	heightConfirms map[uint64]*payload.Confirm
 	badBlocks      map[common.Uint256]DBlock
 
-	VerifyConfirm func(confirm *payload.Confirm, elaHeight uint64) error
+	VerifyConfirm func(confirm *payload.Confirm, elaHeight uint64, timestamp int64) error
 	VerifyBlock   func(block DBlock) error
 	SealHash      func(block DBlock) (common.Uint256, error)
 
 	futureBlocks map[common.Uint256]DBlock
 }
 
-func NewBlockPool(verifyConfirm func(confirm *payload.Confirm, elaHeight uint64) error,
+func NewBlockPool(verifyConfirm func(confirm *payload.Confirm, elaHeight uint64, timestamp int64) error,
 	verifyBlock func(block DBlock) error,
 	sealHash func(block DBlock) (common.Uint256, error)) *BlockPool {
 	return &BlockPool{
@@ -181,7 +182,7 @@ func (bm *BlockPool) appendConfirm(confirm *payload.Confirm) error {
 	if !ok {
 		return errors.New("appennd confirm error, not have DBlock")
 	}
-	if err := bm.VerifyConfirm(confirm, dblock.Nonce()); err != nil {
+	if err := bm.VerifyConfirm(confirm, dblock.Nonce(), int64(dblock.Time())); err != nil {
 		return err
 	}
 	bm.Lock()

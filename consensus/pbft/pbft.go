@@ -455,7 +455,7 @@ func (p *Pbft) verifySeal(chain consensus.ChainReader, header *types.Header, par
 	if err != nil {
 		return err
 	}
-	err = p.verifyConfirm(&confirm, header.Nonce.Uint64())
+	err = p.verifyConfirm(&confirm, header.Nonce.Uint64(), int64(header.Time))
 	if err != nil {
 		return err
 	}
@@ -873,7 +873,7 @@ func (p *Pbft) broadConfirmMsg(confirm *payload.Confirm, height uint64) {
 	p.BroadMessage(msg)
 }
 
-func (p *Pbft) verifyConfirm(confirm *payload.Confirm, elaHeight uint64) error {
+func (p *Pbft) verifyConfirm(confirm *payload.Confirm, elaHeight uint64, timeStamp int64) error {
 	minSignCount := 0
 	if elaHeight == 0 {
 		minSignCount = p.dispatcher.GetConsensusView().GetCRMajorityCount()
@@ -885,7 +885,7 @@ func (p *Pbft) verifyConfirm(confirm *payload.Confirm, elaHeight uint64) error {
 		minSignCount = p.dispatcher.GetConsensusView().GetMajorityCountByTotalSigners(count)
 	}
 	if len(confirm.Votes) < minSignCount {
-		if p.timeSource.AdjustedTime().Unix() <= p.cfg.BPosFullVoteTime-5 {
+		if timeStamp <= p.cfg.BPosFullVoteTime-5 {
 			minSignCount = p.dispatcher.GetConsensusView().GetMinAcceptVoteCount()
 		}
 	}
