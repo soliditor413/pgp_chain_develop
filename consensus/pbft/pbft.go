@@ -828,8 +828,8 @@ func (p *Pbft) Recover() {
 	activePeersCount := 0
 	res := false
 	for {
+		activePeersCount, res = p.hasPeersMajorityCount()
 		if p.timeSource.AdjustedTime().Unix() < p.cfg.BPosFullVoteTime {
-			activePeersCount, res = p.hasPeersMajorityCount()
 			if !res {
 				minCount = p.dispatcher.GetConsensusView().GetMinAcceptVoteCount()
 			}
