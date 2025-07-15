@@ -335,6 +335,7 @@ func (st *StateTransition) TransitionDb() (result *ExecutionResult, err error) {
 	} else {
 		developerAddress := st.evm.ChainConfig().DeveloperContract
 		num := len(developerAddress)
+		fmt.Println("developerAddress ", developerAddress, " count ", num)
 		// During the developer split fee period, half of the transaction fee is allocated to the ELA foundation address
 		if st.evm.ChainConfig().IsdeveloperSplitfeeTime(st.evm.Time.Uint64()) {
 			if num != 2 {
