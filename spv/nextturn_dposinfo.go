@@ -48,6 +48,14 @@ func MainChainIsPowMode() bool {
 	return consensusMode == spv.POW
 }
 
+func GetCRCPublicKeys(elaHeight uint64) [][]byte {
+	crcArbiters, _, err := SpvService.GetArbiters(uint32(elaHeight))
+	if err != nil {
+		return nil
+	}
+	return crcArbiters
+}
+
 func GetProducers(elaHeight uint64) ([][]byte, int, error) {
 	producers := make([][]byte, 0)
 	totalCount := 0

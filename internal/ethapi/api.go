@@ -761,12 +761,18 @@ func (s *PublicBlockChainAPI) GetCurrentProducers(ctx context.Context) ([]string
 }
 
 func (s *PublicBlockChainAPI) ReceivedSmallCrossTx(ctx context.Context, signature string, rawTx string) error {
-	arbiters, total, err := s.GetCurrentProducers(ctx)
-	if err != nil {
-		return err
+	block := s.b.CurrentBlock()
+	elaHeight := block.Nonce()
+
+	arbitersList := spv.GetCRCPublicKeys(elaHeight)
+	crcArbiters := make([]string, len(arbitersList))
+	for i, v := range arbitersList {
+		producer := common.Bytes2Hex(v)
+		crcArbiters[i] = producer
 	}
+
 	height := uint64(s.BlockNumber())
-	err = smallcrosstx.OnSmallCrossTx(arbiters, total, signature, rawTx, height)
+	err := smallcrosstx.OnSmallCrossTx(crcArbiters, len(crcArbiters), signature, rawTx, height)
 	if err != nil {
 		log.Error("ReceivedSmallCrossTx OnSmallCrossTx error", "msg", err.Error())
 		return nil
