@@ -830,10 +830,7 @@ var (
 	DeveloperFeeContract = cli.StringSliceFlag{
 		Name:  "developer.fee.contract",
 		Usage: "configue developer fee contract address",
-		Value: &cli.StringSlice{
-			"0xe6F1aC2eA7488C40c11ED65Cc9b9a23D3628834e", //elastos foundation
-			"0x680BDEe70aBE31B4a50580f2b1D318d08a386c58", //PGNFT CARDS
-		},
+		Value: &cli.StringSlice{},
 	}
 )
 
@@ -1177,6 +1174,18 @@ func MakePasswordList(ctx *cli.Context) []string {
 }
 
 func MakeDeveloperFeeContractAddress(ctx *cli.Context) ([]string, error) {
+	switch {
+	case ctx.GlobalBool(TestnetFlag.Name):
+		ctx.GlobalSet(DeveloperFeeContract.Name, "0xe6F1aC2eA7488C40c11ED65Cc9b9a23D3628834e") ////elastos foundation
+		ctx.GlobalSet(DeveloperFeeContract.Name, "0x680BDEe70aBE31B4a50580f2b1D318d08a386c58") ////PGNFT CARDS
+	case ctx.GlobalBool(RinkebyFlag.Name):
+	case ctx.GlobalBool(GoerliFlag.Name):
+	case ctx.GlobalBool(DeveloperFlag.Name):
+	default: //main net
+		ctx.GlobalSet(DeveloperFeeContract.Name, "0xe6F1aC2eA7488C40c11ED65Cc9b9a23D3628834e") ////elastos foundation
+		ctx.GlobalSet(DeveloperFeeContract.Name, "0x680BDEe70aBE31B4a50580f2b1D318d08a386c58") ////PGNFT CARDS
+	}
+
 	list := ctx.StringSlice(DeveloperFeeContract.Name)
 	if len(list) == 0 {
 		return []string{}, nil
