@@ -156,8 +156,14 @@ func GetCurrentProducers() [][]byte {
 	defer transactionDBMutex.Unlock()
 	b, err := spvTransactiondb.Get([]byte(CURRENT_PRODUCERS))
 	if err != nil {
+		spvHeight := GetSpvHeight()
+		crcArbiters, normalArbitrs, err := SpvService.GetArbiters(uint32(spvHeight))
 		log.Error("[GetCurrentCRProducers] read db error", "error", err)
-		return nil
+		if IsOnlyCRConsensus {
+			return crcArbiters
+		} else {
+			return normalArbitrs
+		}
 	}
 	if b == nil {
 		return nil
