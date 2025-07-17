@@ -231,7 +231,6 @@ func (p *Pbft) checkBPosFullVoteFork(count int) bool {
 
 func (p *Pbft) hasPeersMajorityCount() (int, bool) {
 	connectedCount := p.GetActivePeersCount()
-	fmt.Println("connectedCount ", connectedCount)
 	return connectedCount, p.dispatcher.GetConsensusView().HasProducerMajorityCount(connectedCount)
 }
 

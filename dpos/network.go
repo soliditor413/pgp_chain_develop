@@ -283,9 +283,7 @@ func (n *Network) processMessage(msgItem *messageItem) {
 			n.listener.OnResponseResetViewReceived(msgI)
 		}
 	case dpos_msg.CmdProducers:
-		fmt.Println(">>>>>> process Message producers msg <<<<< ")
 		msgI, processed := m.(*dmsg.ProducersMsg)
-		fmt.Println(">>>>>> process Message producers msg <<<<< ", " processed ", processed)
 		if processed {
 			n.listener.OnProducersMsg(msgI)
 		}
@@ -444,7 +442,6 @@ func createMessage(hdr elap2p.Header, r net.Conn) (message elap2p.Message, err e
 	case msg.CmdResetConsensusView:
 		message = &msg.ResetView{}
 	case dpos_msg.CmdProducers:
-		fmt.Println(">>>>>> createMessage CmdProducers <<<<< ")
 		message = &dmsg.ProducersMsg{}
 	default:
 		return nil, errors.New("Received unsupported message, CMD " + hdr.GetCMD())
