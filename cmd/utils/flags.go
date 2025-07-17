@@ -1175,8 +1175,8 @@ func MakePasswordList(ctx *cli.Context) []string {
 
 func MakeDeveloperFeeContractAddress(ctx *cli.Context) ([]string, error) {
 	if !ctx.GlobalIsSet(DeveloperFeeContract.Name) {
-		ctx.GlobalSet(DeveloperFeeContract.Name, "0xe6F1aC2eA7488C40c11ED65Cc9b9a23D3628834e") ////elastos foundation
-		ctx.GlobalSet(DeveloperFeeContract.Name, "0x680BDEe70aBE31B4a50580f2b1D318d08a386c58") ////PGNFT CARDS
+		ctx.GlobalSet(DeveloperFeeContract.Name, "0x539E768c14266ef5dd44579cd82ADda92cF10bb6") ////elastos foundation multisig wallet
+		ctx.GlobalSet(DeveloperFeeContract.Name, "0xbCA71001b4388B8538560624aE655C8E782566C9") ////PGNFT CARDS
 	}
 
 	list := ctx.StringSlice(DeveloperFeeContract.Name)
@@ -1643,7 +1643,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	switch {
 	case ctx.GlobalBool(TestnetFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 12343
+			cfg.NetworkId = 12344
 		}
 		cfg.Genesis = core.DefaultTestnetGenesisBlock()
 		if !ctx.GlobalIsSet(DataDirFlag.Name) {
@@ -1654,7 +1654,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		//}
 	case ctx.GlobalBool(RinkebyFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 12343
+			cfg.NetworkId = 12344
 		}
 		cfg.Genesis = core.DefaultRinkebyGenesisBlock()
 		if !ctx.GlobalIsSet(DataDirFlag.Name) {
@@ -1662,7 +1662,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		}
 	case ctx.GlobalBool(GoerliFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 12343
+			cfg.NetworkId = 12344
 		}
 		cfg.Genesis = core.DefaultGoerliGenesisBlock()
 		if !ctx.GlobalIsSet(DataDirFlag.Name) {

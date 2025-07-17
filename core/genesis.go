@@ -440,7 +440,7 @@ func DefaultTestnetGenesisBlock() *Genesis {
 			Code:    params.ELATOKEN_CODE,
 			Balance: big.NewInt(0),
 		},
-		common.HexToAddress("0x39BEA06206f1Dc772f8Ec483e9003872C8FA6698"): {
+		common.HexToAddress("0x134c10062bcfC979af4FEFE6657757E61FF2848c"): {
 			Balance: initBalance,
 		},
 	}
