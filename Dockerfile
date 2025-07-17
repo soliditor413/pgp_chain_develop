@@ -12,5 +12,5 @@ FROM alpine:latest
 RUN apk add --no-cache ca-certificates
 COPY --from=builder /pgp-chain/build/bin/* /usr/local/bin/
 
-EXPOSE 20656 20655 8547 20658 20658/udp
+EXPOSE 20666 20655 8547 20668 20668/udp
 #ENTRYPOINT ["pgp"]

@@ -46,7 +46,7 @@ func (w *wizard) deployExplorer() {
 	infos, err := checkExplorer(client, w.network)
 	if err != nil {
 		infos = &explorerInfos{
-			node: &nodeInfos{port: 20658},
+			node: &nodeInfos{port: 20668},
 			port: 80,
 			host: client.server,
 		}

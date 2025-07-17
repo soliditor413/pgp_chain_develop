@@ -84,7 +84,7 @@ var (
 	}
 	nodeURLFlag = cli.StringFlag{
 		Name:  "rpc",
-		Value: "http://localhost:20656",
+		Value: "http://localhost:20666",
 		Usage: "The rpc endpoint of a local or remote pgp node",
 	}
 	clefURLFlag = cli.StringFlag{

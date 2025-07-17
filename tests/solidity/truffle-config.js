@@ -44,7 +44,7 @@
 //     //
 //     // development: {
 //     //  host: "127.0.0.1",     // Localhost (default: none)
-//     //  port: 20656,            // Standard Ethereum port (default: none)
+//     //  port: 20666,            // Standard Ethereum port (default: none)
 //     //  network_id: "*",       // Any network (default: none)
 //     // },
 //
@@ -101,7 +101,7 @@ module.exports = {
    networks: {
       development: {
          host: 'localhost',
-         port: 20656,
+         port: 20666,
          network_id: '*'
       }
    }

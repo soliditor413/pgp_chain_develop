@@ -46,7 +46,7 @@ func (w *wizard) deployWallet() {
 	infos, err := checkWallet(client, w.network)
 	if err != nil {
 		infos = &walletInfos{
-			nodePort: 20658, rpcPort: 20656, webPort: 80, webHost: client.server,
+			nodePort: 20668, rpcPort: 20666, webPort: 80, webHost: client.server,
 		}
 	}
 	existed := err == nil

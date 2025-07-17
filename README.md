@@ -144,7 +144,7 @@ $ pgp --rinkeby console
 ```
 Web3 = require("web3");
 // set web3 uri
-web3 = new Web3("http://127.0.0.1:20656");
+web3 = new Web3("http://127.0.0.1:20666");
 // set withdraw contract
 contract = new web3.eth.Contract([{"constant":false,"inputs":[{"name":"_addr","type":"string"},{"name":"_amount","type":"uint256"},{"name":"_fee","type":"uint256"}],"name":"receivePayload","outputs":[],"payable":true,"stateMutability":"payable","type":"function"},{"payable":true,"stateMutability":"payable","type":"fallback"},{"anonymous":false,"inputs":[{"indexed":false,"name":"_addr","type":"string"},{"indexed":false,"name":"_amount","type":"uint256"},{"indexed":false,"name":"_crosschainamount","type":"uint256"},{"indexed":true,"name":"_sender","type":"address"}],"name":"PayloadReceived","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"_sender","type":"address"},{"indexed":false,"name":"_amount","type":"uint256"},{"indexed":true,"name":"_black","type":"address"}],"name":"EtherDeposited","type":"event"}]);
 // set eth account address
@@ -200,7 +200,7 @@ HTTP based JSON-RPC API options:
 
   * `--rpc` Enable the HTTP-RPC server
   * `--rpcaddr` HTTP-RPC server listening interface (default: "localhost")
-  * `--rpcport` HTTP-RPC server listening port (default: 20656)
+  * `--rpcport` HTTP-RPC server listening port (default: 20666)
   * `--rpcapi` API's offered over the HTTP-RPC interface (default: "eth,net,web3")
   * `--rpccorsdomain` Comma separated list of domains from which to accept cross origin requests (browser enforced)
   * `--ws` Enable the WS-RPC server
