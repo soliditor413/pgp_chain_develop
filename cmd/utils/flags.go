@@ -1650,7 +1650,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 			cfg.EvilSignersJournalDir = filepath.Join(node.DefaultDataDir(), "testnet", "pgp")
 		}
 		if !ctx.GlobalIsSet(BPosFullVoteTime.Name) {
-			cfg.BPosFullVoteTime = 1752813120 //2025-07-18 12:32:00
+			cfg.BPosFullVoteTime = 1753089208 //2025-07-21 17:13:28
 		}
 		//if !ctx.GlobalIsSet(FrozenAccount.Name) {
 		//	ctx.GlobalSet(FrozenAccount.Name, "0x6527946c8b26cc203f9674a5e1d8178beeed70c1")
