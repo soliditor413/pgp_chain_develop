@@ -807,7 +807,7 @@ var (
 	DynamicArbiter = cli.Uint64Flag{
 		Name:  "spv.arbiter.height",
 		Usage: "configue the offset blocks to pre-connect to switch to pbft consensus",
-		Value: 1428912,
+		Value: 1429156,
 	}
 	FrozenAccount = cli.StringSliceFlag{
 		Name:  "frozen.account.list",
@@ -1650,7 +1650,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 			cfg.EvilSignersJournalDir = filepath.Join(node.DefaultDataDir(), "testnet", "pgp")
 		}
 		if !ctx.GlobalIsSet(BPosFullVoteTime.Name) {
-			cfg.BPosFullVoteTime = 1753089208 //2025-07-21 17:13:28
+			cfg.BPosFullVoteTime = 1753185600 //2025-07-22 20:00:00
 		}
 		//if !ctx.GlobalIsSet(FrozenAccount.Name) {
 		//	ctx.GlobalSet(FrozenAccount.Name, "0x6527946c8b26cc203f9674a5e1d8178beeed70c1")
