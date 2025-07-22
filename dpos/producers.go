@@ -209,7 +209,7 @@ func (p *Producers) GetNextOnDutyProducer(offset uint32) []byte {
 }
 
 func (p *Producers) IsMajorityAgree(count int) bool {
-	return count > p.GetMajorityCount()
+	return count >= p.GetMajorityCount()
 }
 
 func (p *Producers) IsMajorityRejected(count int) bool {
@@ -218,7 +218,7 @@ func (p *Producers) IsMajorityRejected(count int) bool {
 }
 
 func (p *Producers) HasProducerMajorityCount(num int) bool {
-	return num > p.GetMajorityCount()
+	return num >= p.GetMajorityCount()
 }
 
 func (p *Producers) HasArbitersMinorityCount(num int) bool {

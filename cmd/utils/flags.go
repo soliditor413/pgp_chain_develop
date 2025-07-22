@@ -818,7 +818,7 @@ var (
 	BPosFullVoteTime = cli.Uint64Flag{
 		Name:  "bpos.fullVote.time",
 		Usage: "BPos consensus full node vote time",
-		Value: 1769930819, //2026/02/01 15:26:59
+		Value: 0,
 	}
 
 	PledgedBillContract = cli.StringFlag{
@@ -1650,7 +1650,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 			cfg.EvilSignersJournalDir = filepath.Join(node.DefaultDataDir(), "testnet", "pgp")
 		}
 		if !ctx.GlobalIsSet(BPosFullVoteTime.Name) {
-			cfg.BPosFullVoteTime = 1753185600 //2025-07-22 20:00:00
+			cfg.BPosFullVoteTime = 0 //2025-07-22 20:00:00
 		}
 		//if !ctx.GlobalIsSet(FrozenAccount.Name) {
 		//	ctx.GlobalSet(FrozenAccount.Name, "0x6527946c8b26cc203f9674a5e1d8178beeed70c1")
