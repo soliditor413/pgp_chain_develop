@@ -9,7 +9,7 @@ For prerequisites and detailed build instructions please read the
 [Installation Instructions](https://github.com/pgprotocol/pgp-chain/wiki/Building-Ethereum)
 on the wiki.
 
-Building `geth` requires both a Go (version 1.20 or later) and a C compiler. You can install
+Building `pgp` requires both a Go (version 1.20 or later) and a C compiler. You can install
 them using your favourite package manager. Once the dependencies are installed, run
 
 ```shell
@@ -31,22 +31,22 @@ make all
 The pgp-chain project comes with several wrappers/executables found in the `cmd`
 directory.
 
-| Command    | Description |
-|:----------:|-------------|
-| **`geth`** | Our main ELA-Ethereum CLI client. It is the entry point into the ELA-Ethereum  network (main-, test- or private net), capable of running as a full node (default), archive node (retaining all historical state) or a light node (retrieving data live). It can be used by other processes as a gateway into the Ethereum network via JSON RPC endpoints exposed on top of HTTP, WebSocket and/or IPC transports. `geth --help` and the [CLI Wiki page](https://github.com/pgprotocol/pgp-chain/wiki/Command-Line-Options) for command line options. |
+| Command    | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+|:----------:|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **`pgp`** | Our main PGP CLI client. It is the entry point into the PGP  network (main-, test- or private net), capable of running as a full node (default), archive node (retaining all historical state) or a light node (retrieving data live). It can be used by other processes as a gateway into the Ethereum network via JSON RPC endpoints exposed on top of HTTP, WebSocket and/or IPC transports. `pgp --help` and the [CLI Wiki page](https://github.com/pgprotocol/pgp-chain/wiki/Command-Line-Options) for command line options.                   |
 | `abigen` | Source code generator to convert Ethereum contract definitions into easy to use, compile-time type-safe Go packages. It operates on plain [Ethereum contract ABIs](https://github.com/ethereum/wiki/wiki/Ethereum-Contract-ABI) with expanded functionality if the contract bytecode is also available. However it also accepts Solidity source files, making development much more streamlined. Please see our [Native DApps](https://github.com/pgprotocol/pgp-chain/wiki/Native-DApps:-Go-bindings-to-Ethereum-contracts) wiki page for details. |
-| `bootnode` | Stripped down version of our Ethereum client implementation that only takes part in the network node discovery protocol, but does not run any of the higher level application protocols. It can be used as a lightweight bootstrap node to aid in finding peers in private networks. |
-| `evm` | Developer utility version of the EVM (Ethereum Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode. Its purpose is to allow isolated, fine-grained debugging of EVM opcodes (e.g. `evm --code 60ff60ff --debug`). |
-| `gethrpctest` | Developer utility tool to support our [ethereum/rpc-test](https://github.com/ethereum/rpc-tests) test suite which validates baseline conformity to the [Ethereum JSON RPC](https://github.com/ethereum/wiki/wiki/JSON-RPC) specs. Please see the [test suite's readme](https://github.com/ethereum/rpc-tests/blob/master/README.md) for details. |
-| `rlpdump` | Developer utility tool to convert binary RLP ([Recursive Length Prefix](https://github.com/ethereum/wiki/wiki/RLP)) dumps (data encoding used by the Ethereum protocol both network as well as consensus wise) to user friendlier hierarchical representation (e.g. `rlpdump --hex CE0183FFFFFFC4C304050583616263`). |
-| `puppeth`    | a CLI wizard that aids in creating a new Ethereum network. |
+| `bootnode` | Stripped down version of our Ethereum client implementation that only takes part in the network node discovery protocol, but does not run any of the higher level application protocols. It can be used as a lightweight bootstrap node to aid in finding peers in private networks.                                                                                                                                                                                                                                                                |
+| `evm` | Developer utility version of the EVM (Ethereum Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode. Its purpose is to allow isolated, fine-grained debugging of EVM opcodes (e.g. `evm --code 60ff60ff --debug`).                                                                                                                                                                                                                                                                    |
+| `gethrpctest` | Developer utility tool to support our [ethereum/rpc-test](https://github.com/ethereum/rpc-tests) test suite which validates baseline conformity to the [Ethereum JSON RPC](https://github.com/ethereum/wiki/wiki/JSON-RPC) specs. Please see the [test suite's readme](https://github.com/ethereum/rpc-tests/blob/master/README.md) for details.                                                                                                                                                                                                    |
+| `rlpdump` | Developer utility tool to convert binary RLP ([Recursive Length Prefix](https://github.com/ethereum/wiki/wiki/RLP)) dumps (data encoding used by the Ethereum protocol both network as well as consensus wise) to user friendlier hierarchical representation (e.g. `rlpdump --hex CE0183FFFFFFC4C304050583616263`).                                                                                                                                                                                                                                |
+| `puppeth`    | a CLI wizard that aids in creating a new Ethereum network.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
-## Running `geth`
+## Running `pgp`
 
 Going through all the possible command line flags is out of scope here (please consult our
 [CLI Wiki page](https://github.com/pgprotocol/pgp-chain/wiki/Command-Line-Options)),
 but we've enumerated a few common parameter combos to get you up to speed quickly
-on how you can run your own `geth` instance.
+on how you can run your own `pgp` instance.
 
 ### Hardware Requirements
 
@@ -76,14 +76,14 @@ $ pgp console
 ```
 
 This command will:
- * Start `geth` in fast sync mode (default, can be changed with the `--syncmode` flag),
+ * Start `pgp` in fast sync mode (default, can be changed with the `--syncmode` flag),
    causing it to download more data in exchange for avoiding processing the entire history
    of the Ethereum network, which is very CPU intensive.
- * Start up `geth`'s built-in interactive [JavaScript console](https://github.com/pgprotocol/pgp-chain/wiki/JavaScript-Console),
+ * Start up `pgp`'s built-in interactive [JavaScript console](https://github.com/pgprotocol/pgp-chain/wiki/JavaScript-Console),
    (via the trailing `console` subcommand) through which you can invoke all official [`web3` methods](https://github.com/elastos/wiki/wiki/JavaScript-API)
-   as well as `geth`'s own [management APIs](https://github.com/pgprotocol/pgp-chain/wiki/Management-APIs).
+   as well as `pgp`'s own [management APIs](https://github.com/pgprotocol/pgp-chain/wiki/Management-APIs).
    This tool is optional and if you leave it out you can always attach to an already running
-   `geth` instance with `geth attach`.
+   `pgp` instance with `pgp attach`.
 
 ### A Full node on the Ethereum test network
 
@@ -100,14 +100,14 @@ $ pgp --testnet console
 The `console` subcommand has the exact same meaning as above and they are equally
 useful on the testnet too. Please see above for their explanations if you've skipped here.
 
-Specifying the `--testnet` flag, however, will reconfigure your `geth` instance a bit:
+Specifying the `--testnet` flag, however, will reconfigure your `pgp` instance a bit:
 
- * Instead of using the default data directory (`~/.ela_ethereum` on Linux for example), `geth`
-   will nest itself one level deeper into a `testnet` subfolder (`~/.ela_ethereum/testnet` on
+ * Instead of using the default data directory (`~/.PGP_Ethereum` on Linux for example), `pgp`
+   will nest itself one level deeper into a `testnet` subfolder (`~/.PGP_Ethereum/testnet` on
    Linux). Note, on OSX and Linux this also means that attaching to a running testnet node
-   requires the use of a custom endpoint since `geth attach` will try to attach to a
+   requires the use of a custom endpoint since `pgp attach` will try to attach to a
    production node endpoint by default. E.g.
-   `geth attach <datadir>/testnet/geth.ipc`. Windows users are not affected by
+   `pgp attach <datadir>/testnet/pgp.ipc`. Windows users are not affected by
    this.
  * Instead of connecting the main Ethereum network, the client will connect to the test
    network, which uses different P2P bootnodes, different network IDs and genesis states.
@@ -115,7 +115,7 @@ Specifying the `--testnet` flag, however, will reconfigure your `geth` instance 
 *Note: Although there are some internal protective measures to prevent transactions from
 crossing over between the main network and test network, you should make sure to always
 use separate accounts for play-money and real-money. Unless you manually move
-accounts, `geth` will by default correctly separate the two networks and will not make any
+accounts, `pgp` will by default correctly separate the two networks and will not make any
 accounts available between them.*
 
 ### Full node on the Rinkeby test network
@@ -148,14 +148,14 @@ web3 = new Web3("http://127.0.0.1:20666");
 // set withdraw contract
 contract = new web3.eth.Contract([{"constant":false,"inputs":[{"name":"_addr","type":"string"},{"name":"_amount","type":"uint256"},{"name":"_fee","type":"uint256"}],"name":"receivePayload","outputs":[],"payable":true,"stateMutability":"payable","type":"function"},{"payable":true,"stateMutability":"payable","type":"fallback"},{"anonymous":false,"inputs":[{"indexed":false,"name":"_addr","type":"string"},{"indexed":false,"name":"_amount","type":"uint256"},{"indexed":false,"name":"_crosschainamount","type":"uint256"},{"indexed":true,"name":"_sender","type":"address"}],"name":"PayloadReceived","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"_sender","type":"address"},{"indexed":false,"name":"_amount","type":"uint256"},{"indexed":true,"name":"_black","type":"address"}],"name":"EtherDeposited","type":"event"}]);
 // set eth account address
-contract.options.address = deploy_contract_address;
+contract.options.address = "0x0000000000000000000000000000000000000064";
 // set account contract keystore info
 acc = web3.eth.accounts.decrypt(keystore_content, ketstore_password);   
 // call receivePayload function，params：(ELA main chain address，amount(In ela up to convert wei 10000000000)，fee)
-cdata  = contract.methods.receivePayload(ELA_address, withdraw_amount, fee).encodeABI();
+cdata  = contract.methods.withdraw(ELA_address, withdraw_amount, fee).encodeABI();
 // gas minimum is 3000000，gasPrice is any value
 tx = {data: cdata, to: contract.options.address, from: acc.address, gas: "3000000", gasPrice: "20000000000"};
-// send transaction amount(use receivePayload function amount)
+// send transaction amount(use withdraw function amount)
 tx.value = withdraw_amount;
 acc.signTransaction(tx).then((res)=>{
    console.log("coming");
@@ -168,7 +168,7 @@ ELA mainnet server Deploy Contract Address: `0x000000000000000000000000000000000
 
 ### Configuration
 
-As an alternative to passing the numerous flags to the `geth` binary, you can also pass a
+As an alternative to passing the numerous flags to the `pgp` binary, you can also pass a
 configuration file via:
 
 ```shell
@@ -182,17 +182,17 @@ export your existing configuration:
 $ pgp --your-favourite-flags dumpconfig
 ```
 
-*Note: This works only with `geth` v1.6.0 and above.*
+*Note: This works only with `pgp` v1.6.0 and above.*
 
-### Programmatically interfacing `geth` nodes
+### Programmatically interfacing `pgp` nodes
 
-As a developer, sooner rather than later you'll want to start interacting with Geth and the Ethereum
-network via your own programs and not manually through the console. To aid this, Geth has built-in
+As a developer, sooner rather than later you'll want to start interacting with PGP and the Ethereum
+network via your own programs and not manually through the console. To aid this, PGP has built-in
 support for a JSON-RPC based APIs ([standard APIs](https://github.com/ethereum/wiki/wiki/JSON-RPC) and
-[Geth specific APIs](https://github.com/pgprotocol/pgp-chain/wiki/Management-APIs)). These can be
+[PGP specific APIs](https://github.com/pgprotocol/pgp-chain/wiki/Management-APIs)). These can be
 exposed via HTTP, WebSockets and IPC (unix sockets on unix based platforms, and named pipes on Windows).
 
-The IPC interface is enabled by default and exposes all the APIs supported by Geth, whereas the HTTP
+The IPC interface is enabled by default and exposes all the APIs supported by PGP, whereas the HTTP
 and WS interfaces need to manually be enabled and only expose a subset of APIs due to security reasons.
 These can be turned on/off and configured as you'd expect.
 
@@ -213,7 +213,7 @@ HTTP based JSON-RPC API options:
   * `--ipcpath` Filename for IPC socket/pipe within the datadir (explicit paths escape it)
 
 You'll need to use your own programming environments' capabilities (libraries, tools, etc) to connect
-via HTTP, WS or IPC to a Geth node configured with the above flags and you'll need to speak [JSON-RPC](http://www.jsonrpc.org/specification)
+via HTTP, WS or IPC to a PGP node configured with the above flags and you'll need to speak [JSON-RPC](http://www.jsonrpc.org/specification)
 on all transports. You can reuse the same connection for multiple requests!
 
 **Note: Please understand the security implications of opening up an HTTP/WS based
@@ -273,7 +273,7 @@ the accounts and populate the `alloc` field with their addresses.
 ```
 
 With the genesis state defined in the above JSON file, you'll need to initialize **every**
-`geth` node with it prior to starting it up to ensure all blockchain parameters are correctly
+`pgp` node with it prior to starting it up to ensure all blockchain parameters are correctly
 set:
 
 ```shell
@@ -296,12 +296,12 @@ that other nodes can use to connect to it and exchange peer information. Make su
 displayed IP address information (most probably `[::]`) with your externally accessible IP to get the
 actual `enode` URL.
 
-*Note: You could also use a full fledged Geth node as a bootnode, but it's the less recommended way.*
+*Note: You could also use a full fledged PGP node as a bootnode, but it's the less recommended way.*
 
 #### Starting up your member nodes
 
 With the bootnode operational and externally reachable (you can try
-`telnet <ip> <port>` to ensure it's indeed reachable), start every subsequent `geth`
+`telnet <ip> <port>` to ensure it's indeed reachable), start every subsequent `pgp`
 node pointed to the bootnode for peer discovery via the `--bootnodes` flag. It will
 probably also be desirable to keep the data directory of your private network separated, so
 do also specify a custom `--datadir` flag.
@@ -323,7 +323,7 @@ and the [Genoil miner](https://github.com/Genoil/cpp-ethereum) repository.
 In a private network setting, however a single CPU miner instance is more than enough for
 practical purposes as it can produce a stable stream of blocks at the correct intervals
 without needing heavy resources (consider running on a single thread, no need for multiple
-ones either). To start a `geth` instance for mining, run it with all your usual flags, extended
+ones either). To start a `pgp` instance for mining, run it with all your usual flags, extended
 by:
 
 ```shell

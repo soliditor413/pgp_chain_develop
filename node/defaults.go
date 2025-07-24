@@ -64,19 +64,19 @@ func DefaultDataDir() string {
 	if home != "" {
 		switch runtime.GOOS {
 		case "darwin":
-			return filepath.Join(home, "Library", "ELA_Ethereum")
+			return filepath.Join(home, "Library", "PGP_Ethereum")
 		case "windows":
 			// We used to put everything in %HOME%\AppData\Roaming, but this caused
 			// problems with non-typical setups. If this fallback location exists and
 			// is non-empty, use it, otherwise DTRT and check %LOCALAPPDATA%.
-			fallback := filepath.Join(home, "AppData", "Roaming", "ELA_Ethereum")
+			fallback := filepath.Join(home, "AppData", "Roaming", "PGP_Ethereum")
 			appdata := windowsAppData()
 			if appdata == "" || isNonEmptyDir(fallback) {
 				return fallback
 			}
-			return filepath.Join(appdata, "ELA_Ethereum")
+			return filepath.Join(appdata, "PGP_Ethereum")
 		default:
-			return filepath.Join(home, ".ela_ethereum")
+			return filepath.Join(home, ".PGP_Ethereum")
 		}
 	}
 	// As we cannot guess a stable location, return empty and handle later
