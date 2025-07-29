@@ -349,6 +349,10 @@ func DefaultGenesisBlock() *Genesis {
 		Difficulty: big.NewInt(1),
 		Alloc:      nil,
 	}
+	initBalance, ok := big.NewInt(0).SetString("200000000000000000000000000", 10)
+	if !ok {
+		panic("invalid initBalance")
+	}
 	extra := make([]byte, 0)
 	extra = append(extra, bytes.Repeat([]byte{0x00}, 32)...)
 	address1 := hexutil.MustDecode("0x0000000000000000000000000000000000000000")
@@ -385,6 +389,9 @@ func DefaultGenesisBlock() *Genesis {
 		params.ELATOKEN: {
 			Code:    params.ELATOKEN_CODE,
 			Balance: big.NewInt(0),
+		},
+		common.HexToAddress("0x8b6a95D60335Ce911fc8fD07fa33E32237e07FC6"): {
+			Balance: initBalance,
 		},
 	}
 	return genesis
