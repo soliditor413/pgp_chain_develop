@@ -57,8 +57,8 @@ var CheckpointOracles = map[common.Hash]*CheckpointOracleConfig{
 var (
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{
-		OldChainID:          big.NewInt(12344),
-		ChainID:             big.NewInt(12344),
+		OldChainID:          big.NewInt(860621),
+		ChainID:             big.NewInt(860621),
 		HomesteadBlock:      big.NewInt(1),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
@@ -202,8 +202,8 @@ var (
 
 	// RinkebyChainConfig contains the chain parameters to run a node on the Rinkeby test network.
 	RinkebyChainConfig = &ChainConfig{
-		OldChainID:          big.NewInt(12345),
-		ChainID:             big.NewInt(12345),
+		OldChainID:          big.NewInt(12346),
+		ChainID:             big.NewInt(12346),
 		HomesteadBlock:      big.NewInt(1),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
