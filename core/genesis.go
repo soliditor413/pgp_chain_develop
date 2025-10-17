@@ -401,7 +401,7 @@ func DefaultGenesisBlock() *Genesis {
 func DefaultTestnetGenesisBlock() *Genesis {
 	genesis := &Genesis{
 		Config:     params.TestnetChainConfig,
-		Timestamp:  1752845021,
+		Timestamp:  1760694466,
 		GasLimit:   0x2068F7700,
 		Difficulty: big.NewInt(1),
 		Alloc:      nil,

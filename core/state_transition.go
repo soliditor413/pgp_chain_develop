@@ -340,16 +340,18 @@ func (st *StateTransition) TransitionDb() (result *ExecutionResult, err error) {
 			if num != 2 {
 				return &ExecutionResult{st.gasUsed(), vmerr, ret}, vm.ErrDeveloperSplitFee
 			}
+			//矿工 35%，nbwFee 35% PG 30%
 			elaFoundationAddress := common.HexToAddress(developerAddress[0])
-			fee := big.NewInt(0).Div(minerFee, big.NewInt(2))
-			st.state.AddBalance(elaFoundationAddress, fee)
-			minerFee = minerFee.Sub(minerFee, fee)
-			// Calculate 10% of the transaction fee for the cards address
-			cardsFee := big.NewInt(0).Mul(minerFee, big.NewInt(10))
-			cardsFee = big.NewInt(0).Div(cardsFee, big.NewInt(100))
-			cardsAddress := common.HexToAddress(developerAddress[1])
-			st.state.AddBalance(cardsAddress, cardsFee)
-			minerFee = minerFee.Sub(minerFee, cardsFee)
+			nbwFee := big.NewInt(0).Mul(minerFee, big.NewInt(35))
+			nbwFee = big.NewInt(0).Div(nbwFee, big.NewInt(100))
+			st.state.AddBalance(elaFoundationAddress, nbwFee)
+			minerFee = minerFee.Sub(minerFee, nbwFee)
+
+			pgFee := big.NewInt(0).Mul(minerFee, big.NewInt(30))
+			pgFee = big.NewInt(0).Div(pgFee, big.NewInt(100))
+			pgAddress := common.HexToAddress(developerAddress[1])
+			st.state.AddBalance(pgAddress, pgFee)
+			minerFee = minerFee.Sub(minerFee, pgFee)
 		}
 		// Allocate the remaining fee to the miner after deducting the cards fee
 		st.state.AddBalance(st.evm.Coinbase, minerFee)

@@ -1176,8 +1176,8 @@ func MakePasswordList(ctx *cli.Context) []string {
 
 func MakeDeveloperFeeContractAddress(ctx *cli.Context) ([]string, error) {
 	if !ctx.GlobalIsSet(DeveloperFeeContract.Name) {
-		ctx.GlobalSet(DeveloperFeeContract.Name, "0x539E768c14266ef5dd44579cd82ADda92cF10bb6") ////elastos foundation multisig wallet
-		ctx.GlobalSet(DeveloperFeeContract.Name, "0x056Dc7d3BE62829e21E4798F4c341EA6Df84177E") ////PGNFT CARDS
+		ctx.GlobalSet(DeveloperFeeContract.Name, "0xA18E1B9fd18Bf64527cc75b654702F61668B2A9d") ////NBW Leo
+		ctx.GlobalSet(DeveloperFeeContract.Name, "0x056Dc7d3BE62829e21E4798F4c341EA6Df84177E") ////PG
 	}
 
 	list := ctx.StringSlice(DeveloperFeeContract.Name)
