@@ -678,7 +678,6 @@ func SendTransaction(from ethCommon.Address, elaTx string, fee *big.Int) (err er
 	if err != nil {
 		log.Error("IpcClient EstimateGas:", "err", err, "main txhash", elaTx)
 		if err.Error() == ErrMainTxHashCompleted.Error() {
-			onElaTxPacked(elaTx)
 			return err, true
 		}
 		res, err = IsFailedElaTx(elaTx)
