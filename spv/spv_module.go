@@ -1211,7 +1211,7 @@ func GetClient() *ethclient.Client {
 }
 
 func GetMinGasPrice(spvHeight uint32) (*big.Int, error) {
-	return big.NewInt(50 * params.GWei), nil
+	return big.NewInt(25 * params.GWei), nil
 	//if SpvService == nil {
 	//	return big.NewInt(0), errors.New("spv service is nil")
 	//}

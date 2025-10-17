@@ -37,6 +37,7 @@ import (
 	"github.com/pgprotocol/pgp-chain/accounts/keystore"
 	"github.com/pgprotocol/pgp-chain/common"
 	"github.com/pgprotocol/pgp-chain/common/fdlimit"
+	"github.com/pgprotocol/pgp-chain/common/math"
 	"github.com/pgprotocol/pgp-chain/consensus"
 	"github.com/pgprotocol/pgp-chain/consensus/clique"
 	"github.com/pgprotocol/pgp-chain/consensus/ethash"
@@ -818,7 +819,7 @@ var (
 	BPosFullVoteTime = cli.Uint64Flag{
 		Name:  "bpos.fullVote.time",
 		Usage: "BPos consensus full node vote time",
-		Value: 0,
+		Value: math.MaxUint64,
 	}
 
 	PledgedBillContract = cli.StringFlag{
@@ -1650,7 +1651,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 			cfg.EvilSignersJournalDir = filepath.Join(node.DefaultDataDir(), "testnet", "pgp")
 		}
 		if !ctx.GlobalIsSet(BPosFullVoteTime.Name) {
-			cfg.BPosFullVoteTime = 0 //2025-07-22 20:00:00
+			cfg.BPosFullVoteTime = math.MaxInt64
 		}
 		//if !ctx.GlobalIsSet(FrozenAccount.Name) {
 		//	ctx.GlobalSet(FrozenAccount.Name, "0x6527946c8b26cc203f9674a5e1d8178beeed70c1")
