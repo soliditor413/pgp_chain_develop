@@ -592,13 +592,15 @@ func (p *Pbft) OnRecover() {
 }
 
 func (p *Pbft) GetMinAcceptVoteCount() int {
-	if p.timeSource.AdjustedTime().Unix() < p.cfg.BPosFullVoteTime {
-		_, res := p.hasPeersMajorityCount()
-		if res {
-			return p.dispatcher.GetConsensusView().GetMajorityCount()
-		}
-		return p.dispatcher.GetConsensusView().GetMinAcceptVoteCount()
-	}
+	//now only use totals producers 2/3,not use MinAcceptVoteCount
+	//The `MinAcceptVoteCount` parameter sets the minimum number of nodes required to produce a block, rather than mandating a strict 2/3 majority vote.
+	//if p.timeSource.AdjustedTime().Unix() < p.cfg.BPosFullVoteTime {
+	//	_, res := p.hasPeersMajorityCount()
+	//	if res {
+	//		return p.dispatcher.GetConsensusView().GetMajorityCount()
+	//	}
+	//	return p.dispatcher.GetConsensusView().GetMinAcceptVoteCount()
+	//}
 	return p.dispatcher.GetConsensusView().GetMajorityCount()
 }
 
