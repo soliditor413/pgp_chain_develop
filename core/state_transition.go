@@ -345,7 +345,6 @@ func (st *StateTransition) TransitionDb() (result *ExecutionResult, err error) {
 			nbwFee := big.NewInt(0).Mul(minerFee, big.NewInt(35))
 			nbwFee = big.NewInt(0).Div(nbwFee, big.NewInt(100))
 			st.state.AddBalance(elaFoundationAddress, nbwFee)
-			minerFee = minerFee.Sub(minerFee, nbwFee)
 
 			pgFee := big.NewInt(0).Mul(minerFee, big.NewInt(30))
 			pgFee = big.NewInt(0).Div(pgFee, big.NewInt(100))
