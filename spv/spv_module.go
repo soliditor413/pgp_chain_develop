@@ -105,7 +105,7 @@ const (
 )
 
 var (
-	IsOnlyCRConsensus = false
+	IsOnlyCRConsensus = true
 )
 
 const (
