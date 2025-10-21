@@ -382,7 +382,7 @@ func DefaultGenesisBlock() *Genesis {
 	extra = append(extra, bytes.Repeat([]byte{0x00}, 65)...)
 	genesis.ExtraData = extra
 	genesis.Alloc = GenesisAlloc{
-		common.HexToAddress("0x8b6a95D60335Ce911fc8fD07fa33E32237e07FC6"): {
+		common.HexToAddress("0x5d48e17ff0e45bf08fd47cc922612d6407140aeb"): {
 			Balance: initBalance,
 		},
 	}
