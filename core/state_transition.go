@@ -351,6 +351,7 @@ func (st *StateTransition) TransitionDb() (result *ExecutionResult, err error) {
 			pgAddress := common.HexToAddress(developerAddress[1])
 			st.state.AddBalance(pgAddress, pgFee)
 			minerFee = minerFee.Sub(minerFee, pgFee)
+			minerFee = minerFee.Sub(minerFee, nbwFee)
 		}
 		// Allocate the remaining fee to the miner after deducting the cards fee
 		st.state.AddBalance(st.evm.Coinbase, minerFee)
