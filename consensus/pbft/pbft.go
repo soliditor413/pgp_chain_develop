@@ -527,6 +527,11 @@ func (p *Pbft) Finalize(chain consensus.ChainReader, header *types.Header, state
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.CalcUncleHash(nil)
 	p.CleanFinalConfirmedBlock(header.Number.Uint64())
+	dutyIndex := p.dispatcher.GetConsensusView().GetDutyIndex()
+
+	if dutyIndex == 0 && spv.SpvIsWorkingHeight() {
+		p.needChangeNextTurnProducers = true
+	}
 }
 
 func (p *Pbft) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
