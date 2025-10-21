@@ -105,7 +105,7 @@ const (
 )
 
 var (
-	IsOnlyCRConsensus = true
+	IsOnlyCRConsensus = false
 )
 
 const (
@@ -173,7 +173,7 @@ func NewService(cfg *Config, tmux *event.TypeMux, dynamicArbiterHeight uint64) (
 
 	spvCfg.PermanentPeers = chainParams.PermanentPeers
 	dataDir = cfg.DataDir
-	spvCfg.NodeVersion = "ESC_1.9.7"
+	spvCfg.NodeVersion = "PGP_1.9.7"
 	initLog(cfg.DataDir)
 
 	service, err := spv.NewSPVService(spvCfg)
