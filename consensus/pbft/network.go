@@ -52,6 +52,7 @@ func (p *Pbft) StartProposal(block *types.Block) (*payload.DPOSProposal, error) 
 	copy(id[:], p.account.PublicKeyBytes()[:])
 	if err, _, _ := p.dispatcher.ProcessProposal(id, proposal); err != nil {
 		log.Error("ProcessProposal error", "err", err)
+		return nil, err
 	}
 
 	m := &msg.Proposal{
