@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"runtime"
 	"sync"
@@ -476,6 +477,41 @@ func InitCurrentProducers(engine *pbft.Pbft, config *params.ChainConfig, current
 	}()
 }
 
+func StartDefaultProducers(engine *pbft.Pbft, config *params.ChainConfig, currentBlock *types.Block) {
+	number := currentBlock.NumberU64()
+	log.Info("StartDefaultProducers", "nonce", currentBlock.Nonce(), "height", number)
+	if currentBlock == nil {
+		return
+	}
+	if !config.IsPBFTFork(currentBlock.Number()) {
+		log.Warn(" >>> is not pbft engine")
+		return
+	}
+	producers := spv.GetDefaultProducers()
+	totalProducers := len(producers)
+	if totalProducers == 0 {
+		log.Error(" >>> no default producers")
+		return
+	}
+
+	if engine.IsCurrentProducers(producers) {
+		log.Info("is current producers, do not need update", "totalProducers", totalProducers)
+		return
+	}
+	blocksigner.SelfIsProducer = false
+	log.Info("StartDefaultProducers ", "producer length", len(producers), "spvHeight", 0)
+	engine.UpdateCurrentProducers(producers, totalProducers, math.MaxUint64)
+	spv.InitNextTurnDposInfo()
+	go func() {
+		if engine.AnnounceDAddr() {
+			if engine.IsProducer() {
+				blocksigner.SelfIsProducer = true
+				engine.Recover()
+			}
+		}
+	}()
+}
+
 func SubscriptEvent(eth *Ethereum, engine consensus.Engine) {
 	//dynamic switch dpos engine
 	if !eth.blockchain.Config().IsPBFTFork(eth.blockchain.CurrentHeader().Number) {
@@ -497,10 +533,13 @@ func SubscriptEvent(eth *Ethereum, engine consensus.Engine) {
 	var blockEvent = make(chan core.ChainEvent)
 	chainSub := eth.blockchain.SubscribeChainEvent(blockEvent)
 	initProducersSub := eth.EventMux().Subscribe(events.InitCurrentProducers{})
+	var startDefaultProducerEvt = make(chan core.StartDefaultProducers)
+	defaultEvt := eth.blockchain.SubscribeStartDefaultProducersEvt(startDefaultProducerEvt)
 	go func() {
 		defer func() {
 			chainSub.Unsubscribe()
 			initProducersSub.Unsubscribe()
+			defaultEvt.Unsubscribe()
 		}()
 		for {
 			select {
@@ -515,10 +554,15 @@ func SubscriptEvent(eth *Ethereum, engine consensus.Engine) {
 						eevents.Notify(dpos.ETUpdateProducers, selfDutyIndex)
 					}
 				}
+				// Reset chain event timer when receiving a new block
+				go eth.blockchain.ResetChainEventTimer()
 			case <-initProducersSub.Chan():
 				pbftEngine := engine.(*pbft.Pbft)
 				currentHeader := eth.blockchain.CurrentBlock()
 				InitCurrentProducers(pbftEngine, eth.blockchain.Config(), currentHeader)
+			case <-startDefaultProducerEvt:
+				pbftEngine := engine.(*pbft.Pbft)
+				StartDefaultProducers(pbftEngine, eth.blockchain.Config(), eth.blockchain.CurrentBlock())
 			case <-eth.stopChan:
 				return
 			}
