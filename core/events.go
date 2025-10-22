@@ -51,6 +51,8 @@ type DangerousChainSideEvent struct{}
 
 type EngineChangeEvent struct{}
 
+// StartDefaultProducers is posted when current producers is not enough
+type StartDefaultProducers struct{}
 type SmallCrossTxEvent struct {
 	RawTxID    string
 	RawTx      string

@@ -10,10 +10,10 @@ type MinedBlockEvent struct{}
 // OnDutyEvent is posted when self is on duty.
 type OnDutyEvent struct{}
 
-//InitCurrentProducers is posted when spv module is initialization completed
+// InitCurrentProducers is posted when spv module is initialization completed
 type InitCurrentProducers struct{}
 
-//CmallCrossTx is posted when a small cross transaction is received 2/3 signatures
+// CmallCrossTx is posted when a small cross transaction is received 2/3 signatures
 type CmallCrossTx struct {
 	Tx it.Transaction
 }

@@ -223,14 +223,14 @@ func (p *Pbft) checkBPosFullVoteFork(count int) bool {
 	if p.timeSource.AdjustedTime().Unix() > p.cfg.BPosFullVoteTime {
 		return false
 	}
-	_, res := p.hasPeersMajorityCount()
+	_, res := p.HasPeersMajorityCount()
 	if res {
 		return p.dispatcher.GetConsensusView().IsMajorityAgree(count)
 	}
 	return count >= p.dispatcher.GetConsensusView().GetMinAcceptVoteCount()
 }
 
-func (p *Pbft) hasPeersMajorityCount() (int, bool) {
+func (p *Pbft) HasPeersMajorityCount() (int, bool) {
 	connectedCount := p.GetActivePeersCount()
 	return connectedCount, p.dispatcher.GetConsensusView().HasProducerMajorityCount(connectedCount)
 }
@@ -833,7 +833,7 @@ func (p *Pbft) Recover() {
 	activePeersCount := 0
 	res := false
 	for {
-		activePeersCount, res = p.hasPeersMajorityCount()
+		activePeersCount, res = p.HasPeersMajorityCount()
 		if p.timeSource.AdjustedTime().Unix() < p.cfg.BPosFullVoteTime {
 			if !res {
 				minCount = p.dispatcher.GetConsensusView().GetMinAcceptVoteCount()

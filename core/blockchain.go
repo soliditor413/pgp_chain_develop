@@ -27,6 +27,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/pgprotocol/pgp-chain/blocksigner"
 	"github.com/pgprotocol/pgp-chain/common"
 	"github.com/pgprotocol/pgp-chain/common/mclock"
@@ -46,8 +47,6 @@ import (
 
 	"github.com/elastos/Elastos.ELA/dpos/p2p/peer"
 	"github.com/elastos/Elastos.ELA/events"
-
-	"github.com/hashicorp/golang-lru"
 )
 
 var (
@@ -145,18 +144,19 @@ type BlockChain struct {
 	triegc *prque.Prque   // Priority queue mapping block numbers to tries to gc
 	gcproc time.Duration  // Accumulates canonical block processing for trie dumping
 
-	hc            *HeaderChain
-	rmLogsFeed    event.Feed
-	chainFeed     event.Feed
-	chainSideFeed event.Feed
-	chainHeadFeed event.Feed
-	logsFeed      event.Feed
-	dangerousFeed event.Feed
-	blockProcFeed event.Feed
-	engineChange  event.Feed
-	smallCroFeed  event.Feed
-	scope         event.SubscriptionScope
-	genesisBlock  *types.Block
+	hc                  *HeaderChain
+	rmLogsFeed          event.Feed
+	chainFeed           event.Feed
+	chainSideFeed       event.Feed
+	chainHeadFeed       event.Feed
+	logsFeed            event.Feed
+	dangerousFeed       event.Feed
+	blockProcFeed       event.Feed
+	engineChange        event.Feed
+	smallCroFeed        event.Feed
+	defaultProducerFeed event.Feed
+	scope               event.SubscriptionScope
+	genesisBlock        *types.Block
 
 	chainmu sync.RWMutex // blockchain insertion lock
 
@@ -192,6 +192,11 @@ type BlockChain struct {
 	evilSigners *EvilSignersMap // EvilSigners contains evil signers
 	evilmu      sync.RWMutex    // evil signers lock
 	journal     *EvilJournal    // Journal of local  evilSingeerEvents to back up to disk
+
+	// Timer for tracking chain events
+	chainEventTimer *time.Timer
+	timerMutex      sync.RWMutex // Protects chainEventTimer
+
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -2419,6 +2424,11 @@ func (bc *BlockChain) SubscribeChangeEnginesEvent(ch chan<- EngineChangeEvent) e
 	return bc.scope.Track(bc.engineChange.Subscribe(ch))
 }
 
+// SubscribeChangeEnginesEvent registers a subscription of StartDefaultProducers
+func (bc *BlockChain) SubscribeStartDefaultProducersEvt(ch chan<- StartDefaultProducers) event.Subscription {
+	return bc.scope.Track(bc.defaultProducerFeed.Subscribe(ch))
+}
+
 // SubscribeBlockProcessingEvent registers a subscription of bool where true means
 // block processing has started while false means it has stopped.
 func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription {
@@ -2478,4 +2488,55 @@ func (bc *BlockChain) addEvilSingerEvents(evilEvents []*EvilSingerEvent) []error
 		bc.evilSigners = &EvilSignersMap{}
 	}
 	return bc.evilSigners.AddEvilSingerEvents(evilEvents)
+}
+
+// ResetChainEventTimer resets the chain event timer
+func (bc *BlockChain) ResetChainEventTimer() {
+	bc.timerMutex.Lock()
+	defer bc.timerMutex.Unlock()
+	duration := 5 * time.Minute
+	if bc.chainEventTimer == nil {
+		bc.chainEventTimer = time.NewTimer(duration)
+		go func() {
+			select {
+			case <-bc.chainEventTimer.C:
+				bc.checkNetworkConnectionsOnTimeout()
+			}
+		}()
+	}
+	bc.chainEventTimer.Reset(duration)
+}
+
+// checkNetworkConnectionsOnTimeout checks network connections when timer expires
+func (bc *BlockChain) checkNetworkConnectionsOnTimeout() {
+	// Get the pbft engine
+	pbftEngine := bc.Engine()
+	if pbftEngine == nil {
+		log.Warn("pbft engine is nil", "Engine", pbftEngine)
+		return
+	}
+	// Type assert to get pbft-specific methods
+	if pbft, ok := pbftEngine.(interface {
+		GetActivePeersCount() int
+		HasPeersMajorityCount() (int, bool)
+	}); ok {
+		connectedCount, hasMajority := pbft.HasPeersMajorityCount()
+		log.Info("Network connection check on timeout",
+			"connectedCount", connectedCount,
+			"hasMajority", hasMajority)
+
+		if !hasMajority {
+			log.Warn("Insufficient network connections detected",
+				"connectedCount", connectedCount,
+				"message", "Network may be unstable or disconnected")
+			bc.defaultProducerFeed.Send(StartDefaultProducers{})
+			// Here you can add additional logic for handling insufficient connections
+			// For example: trigger reconnection, alert monitoring systems, etc.
+		} else {
+			log.Info("Network connections are sufficient",
+				"connectedCount", connectedCount)
+		}
+	} else {
+		log.Warn("PBFT engine does not support network connection checking")
+	}
 }
