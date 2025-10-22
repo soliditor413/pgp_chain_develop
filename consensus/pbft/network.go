@@ -290,6 +290,7 @@ func (p *Pbft) OnInsertBlock(block *types.Block) bool {
 		isSame := p.dispatcher.GetConsensusView().IsSameProducers(curProducers)
 		if !isSame {
 			p.changeNextTurnProduces(block.NumberU64() + 1)
+			p.dispatcher.ResetConsensus(block.NumberU64() + 1)
 			p.broadChangeProducersMsg(block.NumberU64() + 1)
 		} else {
 			log.Info("For the same batch of producers, no need to change current producers")
