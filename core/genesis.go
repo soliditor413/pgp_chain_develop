@@ -382,6 +382,14 @@ func DefaultGenesisBlock() *Genesis {
 	extra = append(extra, bytes.Repeat([]byte{0x00}, 65)...)
 	genesis.ExtraData = extra
 	genesis.Alloc = GenesisAlloc{
+		params.ELAMINTER: {
+			Code:    params.ELAMINTER_CODE,
+			Balance: big.NewInt(0),
+		},
+		params.ELATOKEN: {
+			Code:    params.ELATOKEN_CODE,
+			Balance: big.NewInt(0),
+		},
 		common.HexToAddress("0x5d48e17ff0e45bf08fd47cc922612d6407140aeb"): {
 			Balance: initBalance,
 		},
@@ -431,6 +439,14 @@ func DefaultTestnetGenesisBlock() *Genesis {
 		panic("invalid initBalance")
 	}
 	genesis.Alloc = GenesisAlloc{
+		params.ELAMINTER: {
+			Code:    params.ELAMINTER_CODE,
+			Balance: big.NewInt(0),
+		},
+		params.ELATOKEN: {
+			Code:    params.ELATOKEN_CODE,
+			Balance: big.NewInt(0),
+		},
 		common.HexToAddress("0x134c10062bcfC979af4FEFE6657757E61FF2848c"): {
 			Balance: initBalance,
 		},
@@ -476,7 +492,16 @@ func DefaultRinkebyGenesisBlock() *Genesis {
 	extra = append(extra, address12...)
 	extra = append(extra, bytes.Repeat([]byte{0x00}, 65)...)
 	genesis.ExtraData = extra
-	genesis.Alloc = GenesisAlloc{}
+	genesis.Alloc = GenesisAlloc{
+		params.ELAMINTER: {
+			Code:    params.ELAMINTER_CODE,
+			Balance: big.NewInt(0),
+		},
+		params.ELATOKEN: {
+			Code:    params.ELATOKEN_CODE,
+			Balance: big.NewInt(0),
+		},
+	}
 	return genesis
 }
 
