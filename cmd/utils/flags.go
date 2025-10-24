@@ -1650,6 +1650,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		if !ctx.GlobalIsSet(DataDirFlag.Name) {
 			cfg.EvilSignersJournalDir = filepath.Join(node.DefaultDataDir(), "testnet", "pgp")
 		}
+		if !ctx.GlobalIsSet(DynamicArbiter.Name) {
+			cfg.DynamicArbiterHeight = 1496588
+		}
 		if !ctx.GlobalIsSet(BPosFullVoteTime.Name) {
 			cfg.BPosFullVoteTime = math.MaxInt64
 		}
