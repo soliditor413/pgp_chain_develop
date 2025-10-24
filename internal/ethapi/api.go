@@ -761,9 +761,7 @@ func (s *PublicBlockChainAPI) GetCurrentProducers(ctx context.Context) ([]string
 }
 
 func (s *PublicBlockChainAPI) ReceivedSmallCrossTx(ctx context.Context, signature string, rawTx string) error {
-	block := s.b.CurrentBlock()
-	elaHeight := block.Nonce()
-
+	elaHeight := spv.GetSpvHeight()
 	arbitersList := spv.GetCRCPublicKeys(elaHeight)
 	crcArbiters := make([]string, len(arbitersList))
 	for i, v := range arbitersList {

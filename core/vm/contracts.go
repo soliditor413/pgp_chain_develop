@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -39,6 +40,7 @@ import (
 
 	"github.com/elastos/Elastos.ELA/core/contract"
 	"github.com/elastos/Elastos.ELA/core/contract/program"
+	elatx "github.com/elastos/Elastos.ELA/core/transaction"
 	"github.com/elastos/Elastos.ELA/core/types/payload"
 	elaCrypto "github.com/elastos/Elastos.ELA/crypto"
 	"golang.org/x/crypto/ripemd160"
@@ -165,6 +167,7 @@ var PrecompiledContractsShangHai = map[common.Address]PrecompiledContract{
 	common.BytesToAddress(params.GetMainChainLatestHeight.Bytes()):  &getMainChainLatestHeight{},
 	common.BytesToAddress(params.GetMainChainRechargeData.Bytes()):  &getMainChainRechargeData{},
 	common.BytesToAddress(params.GetWithdrawData.Bytes()):           &getWithdrawData{},
+	common.BytesToAddress(params.VerifySmallCrossTx.Bytes()):        &verifySmallCrossTx{},
 }
 
 var (
@@ -1610,4 +1613,48 @@ func (c *getWithdrawData) Run(input []byte) ([]byte, error) {
 	}
 	fmt.Println(" return packed", common.Bytes2Hex(packed))
 	return packed, nil
+}
+
+type verifySmallCrossTx struct{}
+
+func (c *verifySmallCrossTx) RequiredGas(input []byte) uint64 {
+	return 0
+}
+
+func (c *verifySmallCrossTx) Run(input []byte) ([]byte, error) {
+	size := len(input) - 64
+	input = getData(input, 64, uint64(size))
+	rawTxid, rawTx, signatures, height := spv.IsSmallCrossTxByData(input)
+	if len(rawTxid) == 0 {
+		log.Warn("verifySmallCrossTx", "rawTxid empty")
+		return false32Byte, nil
+	}
+	res, err := spv.VerifySmallCrossTx(rawTxid, rawTx, signatures, height)
+	if !res {
+		log.Warn("verifySmallCrossTx failed")
+		return false32Byte, nil
+	}
+	if err != nil {
+		log.Warn("verifySmallCrossTx failed", "error", err)
+		return false32Byte, err
+	}
+
+	buff, err := hex.DecodeString(rawTx)
+	if err != nil {
+		log.Error("SmallCrossTx DecodeString raw error", "error", err)
+		return false32Byte, err
+	}
+	r := bytes.NewReader(buff)
+	txn, err := elatx.GetTransactionByBytes(r)
+	if err != nil {
+		log.Error("[verifySmallCross precompile] Invalid data from GetTransactionByBytes")
+		return false32Byte, err
+	}
+	err = txn.Deserialize(r)
+	if err != nil {
+		log.Error("[verifySmallCross precompile] Decode transaction error", err.Error())
+		return false32Byte, err
+	}
+	spv.NotifySmallCrossTx(txn)
+	return true32Byte, nil
 }

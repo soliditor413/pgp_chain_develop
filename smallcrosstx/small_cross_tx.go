@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"strconv"
 	"sync"
 
@@ -72,7 +73,7 @@ func OnSmallCrossTx(arbiters []string, total int, signature, rawTx string,
 		if ctx.VerifiedSignature(signature) {
 			return errors.New("verified this signature")
 		}
-		count = len(ctx.Signatures)
+		count = smallCrossTxCountMap[txn.Hash().String()]
 	}
 	maxSignCount := GetMaxArbitersSign(total)
 	if count >= maxSignCount {
@@ -96,24 +97,26 @@ func OnSmallCrossTx(arbiters []string, total int, signature, rawTx string,
 		}
 		err = elaCrypto.Verify(*pubKey, buff, sig)
 		if err == nil {
-			if count == 0 {
+			list := verifiedArbiter[txn.Hash().String()]
+			verifiedArbiter[txn.Hash().String()] = append(list, pubkey)
+			count++
+			smallCrossTxCountMap[txn.Hash().String()] = count
+			if count == 1 {
 				err = PutSmallTxData(rawTx, txn.Hash().String())
 				if err != nil {
 					return err
 				}
 			}
-			count++
-			log.Info("OnSmallCrossTx verified ", "count", count, "maxSignCount", maxSignCount)
+			log.Info("OnSmallCrossTx verified ", "count", count, "maxSignCount", maxSignCount, "pubKey ", pubkey, "signature ", signature)
 			if count <= maxSignCount {
 				err = PutSmallTxSignature(signature, txn.Hash().String(), count-1, blockNumber)
 				if err != nil {
 					return err
 				}
-				list := verifiedArbiter[txn.Hash().String()]
-				verifiedArbiter[txn.Hash().String()] = append(list, pubkey)
-				smallCrossTxCountMap[txn.Hash().String()] = count
 			}
 			break
+		} else {
+			fmt.Println("OnSmallCrossTx verified failed=", pubkey)
 		}
 	}
 	if count >= maxSignCount {

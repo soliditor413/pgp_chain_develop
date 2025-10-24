@@ -1159,21 +1159,16 @@ func verifySmallCrossTxBySignature(rawTx string, signatures []string,
 	if b == nil {
 		return false, errors.New("current block is nil")
 	}
-	if b.Nonce() == 0 {
-		producers := PbftEngine.GetPbftConfig().Producers
-		arbiters = make([][]byte, 0)
-		for _, producer := range producers {
-			arbiters = append(arbiters, ethCommon.Hex2Bytes(producer))
-		}
-		total = len(producers)
-	} else {
-		producers, totalNum, err := GetProducers(b.Nonce())
-		if err != nil {
-			return false, err
-		}
-		arbiters = producers
-		total = totalNum
+	spvHeight := b.Nonce()
+	if spvHeight == 0 {
+		spvHeight = GetSpvHeight()
 	}
+	producers, totalNum, err := GetProducers(spvHeight)
+	if err != nil {
+		return false, err
+	}
+	arbiters = producers
+	total = totalNum
 	buff, err := hex.DecodeString(rawTx)
 	if err != nil {
 		log.Error("VerifySmallCrossTx DecodeString raw error", "error", err)
