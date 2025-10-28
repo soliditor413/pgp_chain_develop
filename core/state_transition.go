@@ -337,21 +337,15 @@ func (st *StateTransition) TransitionDb() (result *ExecutionResult, err error) {
 		num := len(developerAddress)
 		// During the developer split fee period, half of the transaction fee is allocated to the ELA foundation address
 		if st.evm.ChainConfig().IsdeveloperSplitfeeTime(st.evm.Time.Uint64()) {
-			if num != 2 {
+			if num != 1 {
 				return &ExecutionResult{st.gasUsed(), vmerr, ret}, vm.ErrDeveloperSplitFee
 			}
-			//矿工 35%，nbwFee 35% PG 30%
-			elaFoundationAddress := common.HexToAddress(developerAddress[0])
-			nbwFee := big.NewInt(0).Mul(minerFee, big.NewInt(35))
-			nbwFee = big.NewInt(0).Div(nbwFee, big.NewInt(100))
-			st.state.AddBalance(elaFoundationAddress, nbwFee)
-
-			pgFee := big.NewInt(0).Mul(minerFee, big.NewInt(30))
+			//MinerReward 35% OtherReward 65%
+			pgFee := big.NewInt(0).Mul(minerFee, big.NewInt(65))
 			pgFee = big.NewInt(0).Div(pgFee, big.NewInt(100))
-			pgAddress := common.HexToAddress(developerAddress[1])
+			pgAddress := common.HexToAddress(developerAddress[0])
 			st.state.AddBalance(pgAddress, pgFee)
 			minerFee = minerFee.Sub(minerFee, pgFee)
-			minerFee = minerFee.Sub(minerFee, nbwFee)
 		}
 		// Allocate the remaining fee to the miner after deducting the cards fee
 		st.state.AddBalance(st.evm.Coinbase, minerFee)
