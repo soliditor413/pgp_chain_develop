@@ -99,7 +99,7 @@ var (
 			PrintLevel:     0,
 			MaxLogsSize:    0,
 			MaxPerLogSize:  0,
-			Magic:          202505,
+			Magic:          202510,
 			IPAddress:      "",
 			DPoSPort:       0,
 			MaxNodePerHost: 100,

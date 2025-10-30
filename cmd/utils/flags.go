@@ -808,7 +808,7 @@ var (
 	DynamicArbiter = cli.Uint64Flag{
 		Name:  "spv.arbiter.height",
 		Usage: "configue the offset blocks to pre-connect to switch to pbft consensus",
-		Value: 2071673,
+		Value: 2074338,
 	}
 	FrozenAccount = cli.StringSliceFlag{
 		Name:  "frozen.account.list",
