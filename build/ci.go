@@ -67,7 +67,7 @@ var (
 	// Files that end up in the pgp*.zip archive.
 	gethArchiveFiles = []string{
 		"COPYING",
-		executablePath("pgp"),
+		executablePath("pg"),
 	}
 
 	// Files that end up in the pgp-alltools*.zip archive.
@@ -76,7 +76,7 @@ var (
 		executablePath("abigen"),
 		executablePath("bootnode"),
 		executablePath("evm"),
-		executablePath("pgp"),
+		executablePath("pg"),
 		executablePath("puppeth"),
 		executablePath("rlpdump"),
 		executablePath("wnode"),
@@ -98,7 +98,7 @@ var (
 			Description: "Developer utility version of the EVM (Ethereum Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode.",
 		},
 		{
-			BinaryName:  "pgp",
+			BinaryName:  "pg",
 			Description: "Ethereum CLI client.",
 		},
 		{
@@ -233,6 +233,14 @@ func doInstall(cmdline []string) {
 		goinstall.Args = append(goinstall.Args, "-modcacherw")
 		goinstall.Args = append(goinstall.Args, packages...)
 		build.MustRun(goinstall)
+		// Rename pgp to pg if it exists
+		pgpPath := executablePath("pgp")
+		pgPath := executablePath("pg")
+		if _, err := os.Stat(pgpPath); err == nil {
+			if err := os.Rename(pgpPath, pgPath); err != nil {
+				log.Printf("Warning: failed to rename %s to %s: %v", pgpPath, pgPath, err)
+			}
+		}
 		return
 	}
 	// If we are cross compiling to ARMv5 ARMv6 or ARMv7, clean any previous builds
@@ -258,10 +266,15 @@ func doInstall(cmdline []string) {
 			}
 			for name := range pkgs {
 				if name == "main" {
+					// Use "pg" as output name when building from cmd/pgp directory
+					outputName := cmd.Name()
+					if outputName == "pgp" {
+						outputName = "pg"
+					}
 					gobuild := goToolArch(*arch, *cc, "build", buildFlags(env)...)
 					gobuild.Args = append(gobuild.Args, "-v")
 					gobuild.Args = append(gobuild.Args, "-modcacherw")
-					gobuild.Args = append(gobuild.Args, []string{"-o", executablePath(cmd.Name())}...)
+					gobuild.Args = append(gobuild.Args, []string{"-o", executablePath(outputName)}...)
 					gobuild.Args = append(gobuild.Args, "."+string(filepath.Separator)+filepath.Join("cmd", cmd.Name()))
 					build.MustRun(gobuild)
 					break
@@ -748,7 +761,7 @@ func doWindowsInstaller(cmdline []string) {
 			continue
 		}
 		allTools = append(allTools, filepath.Base(file))
-		if filepath.Base(file) == "pgp.exe" {
+		if filepath.Base(file) == "pg.exe" {
 			gethTool = file
 		} else {
 			devTools = append(devTools, file)

@@ -14,7 +14,7 @@ GO ?= latest
 pgp:
 	build/env.sh go run build/ci.go install ./cmd/pgp
 	@echo "Done building."
-	@echo "Run \"$(GOBIN)/pgp\" to launch pgp."
+	@echo "Run \"$(GOBIN)/pg\" to launch pg."
 
 bootnode:
 	build/env.sh go run build/ci.go install ./cmd/bootnode
