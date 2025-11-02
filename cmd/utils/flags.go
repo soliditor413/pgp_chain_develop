@@ -798,7 +798,7 @@ var (
 	PbftDposPort = cli.StringFlag{
 		Name:  "pbft.net.port",
 		Usage: "connect dpos direct net port",
-		Value: "20669",
+		Value: "20679",
 	}
 	PbftMinerAddress = cli.StringFlag{
 		Name:  "pbft.miner.address",
