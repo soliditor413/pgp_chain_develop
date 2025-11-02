@@ -167,7 +167,7 @@ func New(chainConfig *params.ChainConfig, dataDir string) *Pbft {
 		}
 	}
 	medianTimeSouce := dtime.NewMedianTime()
-
+	blockPeriod := 3
 	pbft := &Pbft{
 		datadir:            dataDir,
 		cfg:                *cfg,
@@ -179,7 +179,7 @@ func New(chainConfig *params.ChainConfig, dataDir string) *Pbft {
 		requestedProposals: make(map[ecom.Uint256]struct{}),
 		statusMap:          make(map[uint32]map[string]*dmsg.ConsensusStatus),
 		notHandledProposal: make(map[string]struct{}),
-		period:             5,
+		period:             uint64(blockPeriod),
 		timeSource:         medianTimeSouce,
 	}
 	blockPool := dpos.NewBlockPool(pbft.verifyConfirm, pbft.verifyBlock, DBlockSealHash)
@@ -212,8 +212,9 @@ func New(chainConfig *params.ChainConfig, dataDir string) *Pbft {
 		pbft.network = network
 		pbft.subscribeEvent()
 	}
+	tolerance := time.Duration(blockPeriod) * 2 * time.Second
 	pbft.dispatcher = dpos.NewDispatcher(producers, pbft.onConfirm, pbft.onUnConfirm, pbft.checkBPosFullVoteFork,
-		10*time.Second, accpubkey, medianTimeSouce, pbft, chainConfig.GetPbftBlock())
+		tolerance, accpubkey, medianTimeSouce, pbft, chainConfig.GetPbftBlock())
 	return pbft
 }
 
