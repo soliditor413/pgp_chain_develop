@@ -1490,6 +1490,10 @@ func (c *getMainChainRechargeData) RequiredGas(input []byte) uint64 {
 func (c *getMainChainRechargeData) Run(input []byte) ([]byte, error) {
 	elaHash := getData(input, 0, 32)
 	hash := common.BytesToHash(elaHash).String()
+	if err := spv.TrySetRechargeDataFromSpvService(hash); err != nil {
+		log.Error("TrySetRechargeDataFromSpvService failed", "error", err)
+		return []byte{}, err
+	}
 	datas, _, err := spv.GetRechargeDataByTxhash(hash)
 	if err != nil {
 		log.Error("GetRechargeDataByTxhash failed", "error", err, "hash ", hash)

@@ -336,7 +336,7 @@ func (l *listener) Notify(id common.Uint256, proof bloom.MerkleProof, tx it.Tran
 	fee, addr, output := FindOutputFeeAndaddressByTxHash(tx.Hash().String())
 	var blackAddr ethCommon.Address
 	if fee.Cmp(new(big.Int)) <= 0 && output.Cmp(new(big.Int)) <= 0 && addr == blackAddr {
-		savePayloadInfo(tx.(*elatx.TransferCrossChainAssetTransaction), l)
+		SavePayloadInfo(tx.(*elatx.TransferCrossChainAssetTransaction), l)
 	} else {
 		log.Info("all ready received this cross transaction")
 	}
@@ -359,7 +359,7 @@ func NotifySmallCrossTx(tx it.Transaction) {
 	if !blocksigner.SelfIsProducer {
 		atomic.StoreInt32(&candSend, 0)
 	}
-	savePayloadInfo(tx, nil)
+	SavePayloadInfo(tx, nil)
 }
 
 func OnReceivedRechargeTx(tx it.Transaction) error {
@@ -455,7 +455,7 @@ func saveOutputPayload(outputs []*elacom.Output, txHash string) error {
 }
 
 // savePayloadInfo save and send spv perception
-func savePayloadInfo(elaTx it.Transaction, l *listener) {
+func SavePayloadInfo(elaTx it.Transaction, l *listener) {
 	fmt.Println("savePayloadInfo", "elaTx.PayloadVersion()", elaTx.PayloadVersion())
 	if elaTx.PayloadVersion() >= payload.TransferCrossChainVersionV1 {
 		err := OnReceivedRechargeTx(elaTx)

@@ -8,6 +8,7 @@ import (
 	ethCommon "github.com/pgprotocol/pgp-chain/common"
 
 	"github.com/elastos/Elastos.ELA/common"
+	typeCommon "github.com/elastos/Elastos.ELA/core/types/common"
 )
 
 type RechargeData struct {
@@ -95,4 +96,28 @@ func GetRechargeDataByTxhash(elaHash string) (RechargeDatas, *big.Int, error) {
 		rechargeDatas = append(rechargeDatas, data)
 	}
 	return rechargeDatas, totalFee, nil
+}
+
+func TrySetRechargeDataFromSpvService(elaHash string) error {
+	if elaHash[0:2] == "0x" {
+		elaHash = elaHash[2:]
+	}
+	fee, addr, output := FindOutputFeeAndaddressByTxHash(elaHash)
+	var blackAddr ethCommon.Address
+	if fee.Cmp(new(big.Int)) <= 0 && output.Cmp(new(big.Int)) <= 0 && addr == blackAddr {
+		txID, err := common.Uint256FromHexString(elaHash)
+		if err != nil {
+			return err
+		}
+		tx, err := SpvService.GetTransaction(txID)
+		if err != nil {
+			return err
+		}
+		tx.IsTransferCrossChainAssetTx()
+		if tx == nil || tx.TxType() != typeCommon.TransferCrossChainAsset {
+			return errors.New("not recharge tx: " + elaHash)
+		}
+		SavePayloadInfo(tx, nil)
+	}
+	return nil
 }
