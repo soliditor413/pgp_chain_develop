@@ -20,6 +20,7 @@ package core
 import (
 	"errors"
 	"fmt"
+	"github.com/pgprotocol/pgp-chain/common/math"
 	"io"
 	"math/big"
 	mrand "math/rand"
@@ -196,7 +197,6 @@ type BlockChain struct {
 	// Timer for tracking chain events
 	chainEventTimer *time.Timer
 	timerMutex      sync.RWMutex // Protects chainEventTimer
-
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -2492,19 +2492,47 @@ func (bc *BlockChain) addEvilSingerEvents(evilEvents []*EvilSingerEvent) []error
 
 // ResetChainEventTimer resets the chain event timer
 func (bc *BlockChain) ResetChainEventTimer() {
-	bc.timerMutex.Lock()
-	defer bc.timerMutex.Unlock()
 	duration := 5 * time.Minute
+	resetDuration := func(delay time.Duration) {
+		bc.timerMutex.Lock()
+		defer bc.timerMutex.Unlock()
+		bc.chainEventTimer.Stop()
+		bc.chainEventTimer.Reset(delay)
+	}
+
 	if bc.chainEventTimer == nil {
 		bc.chainEventTimer = time.NewTimer(duration)
 		go func() {
-			select {
-			case <-bc.chainEventTimer.C:
-				bc.checkNetworkConnectionsOnTimeout()
+			for {
+				select {
+				case <-bc.chainEventTimer.C:
+					bc.defaultProducerFeed.Send(StartDefaultProducers{})
+					// Re-evaluate duration on each tick
+					resetDuration(duration)
+				}
 			}
 		}()
 	}
-	bc.chainEventTimer.Reset(duration)
+	resetDuration(duration)
+}
+
+func (bc *BlockChain) DelayToCheckNetwork() {
+	time.Sleep(10 * time.Second)
+	header := bc.CurrentHeader()
+	if header == nil {
+		log.Error("DelayToCheckNetwork header is nil")
+		return
+	}
+	if header.Nonce.Uint64() != math.MaxUint64 {
+		log.Info("is default producer consensus")
+		return
+	}
+	now := uint64(time.Now().Unix())
+	if now-header.Time < 10 {
+		log.Info("already produce block")
+		return
+	}
+	bc.checkNetworkConnectionsOnTimeout()
 }
 
 // checkNetworkConnectionsOnTimeout checks network connections when timer expires
