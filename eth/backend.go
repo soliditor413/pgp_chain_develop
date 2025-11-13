@@ -445,6 +445,7 @@ func InitCurrentProducers(engine *pbft.Pbft, config *params.ChainConfig, current
 		log.Info("blocksigner.SelfIsProducer", "", blocksigner.SelfIsProducer)
 		if res {
 			eevents.Notify(dpos.ETUpdateProducers, selfDutyIndex)
+			engine.GetBlockChain().ResetChainEventTimer()
 		}
 		return
 	}
@@ -459,7 +460,7 @@ func InitCurrentProducers(engine *pbft.Pbft, config *params.ChainConfig, current
 		return
 	}
 	if engine.IsCurrentProducers(producers) {
-		log.Info("is current producers, do not need update", "totalProducers", totalProducers)
+		log.Info("[InitCurrentProducers] is current producers, do not need update", "totalProducers", totalProducers)
 		return
 	}
 	blocksigner.SelfIsProducer = false
@@ -495,7 +496,7 @@ func StartDefaultProducers(engine *pbft.Pbft, config *params.ChainConfig, curren
 	}
 
 	if engine.IsCurrentProducers(producers) {
-		log.Info("is current producers, do not need update", "totalProducers", totalProducers)
+		log.Info("[StartDefaultProducers]is current producers, do not need update", "totalProducers", totalProducers)
 		return
 	}
 	blocksigner.SelfIsProducer = false
@@ -552,10 +553,10 @@ func SubscriptEvent(eth *Ethereum, engine consensus.Engine) {
 					blocksigner.SelfIsProducer = pbftEngine.IsProducer()
 					if res {
 						eevents.Notify(dpos.ETUpdateProducers, selfDutyIndex)
+						go eth.blockchain.DelayToCheckNetwork()
 					}
+					go eth.blockchain.ResetChainEventTimer()
 				}
-				// Reset chain event timer when receiving a new block
-				go eth.blockchain.ResetChainEventTimer()
 			case <-initProducersSub.Chan():
 				pbftEngine := engine.(*pbft.Pbft)
 				currentHeader := eth.blockchain.CurrentBlock()
