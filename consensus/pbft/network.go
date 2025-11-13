@@ -283,7 +283,7 @@ func (p *Pbft) OnInsertBlock(block *types.Block) bool {
 
 	log.Info("[OnInsertBlock]",
 		" block.Nonce ", block.Nonce(),
-		"needChangeNextTurnProducers", p.needChangeNextTurnProducers,
+		" needChangeNextTurnProducers", p.needChangeNextTurnProducers,
 		"height", block.NumberU64())
 	if p.needChangeNextTurnProducers {
 		p.needChangeNextTurnProducers = false
@@ -311,7 +311,7 @@ func (p *Pbft) OnInsertBlock(block *types.Block) bool {
 		}
 		isBackword := p.dispatcher.GetConsensusView().GetSpvHeight() < block.Nonce()
 		isCurrent := p.IsCurrentProducers(producers)
-		log.Info("current producers spvHeight", "height", p.dispatcher.GetConsensusView().GetSpvHeight(), "block.Nonce()", block.Nonce(), "isBackword", isBackword, "isCurrent", isCurrent)
+		log.Info("current producers spvHeight", "height", p.dispatcher.GetConsensusView().GetSpvHeight(), "block.Nonce()", block.Nonce(), " isBackword", isBackword, "isCurrent", isCurrent)
 		if isBackword && !isCurrent {
 			p.UpdateCurrentProducers(producers, totalCount, spvHeight)
 			go p.AnnounceDAddr()
@@ -864,7 +864,6 @@ func (p *Pbft) OnProducersMsg(msg *dmsg.ProducersMsg) {
 		p.needChangeNextTurnProducers = true
 		return
 	}
-	p.needChangeNextTurnProducers = false
 	if p.IsCurrentProducers(currentProducers) {
 		return
 	}
