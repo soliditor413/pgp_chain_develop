@@ -36,6 +36,9 @@ func NewProducers(producers [][]byte, startHeight uint64) *Producers {
 		workingHeight: startHeight,
 	}
 	defaultCRCSignerNumber = len(producers)
+	sort.Slice(producers, func(i, j int) bool {
+		return bytes.Compare(producers[i], producers[j]) < 0
+	})
 	producer.UpdateProducers(producers, len(producers), 0)
 	return producer
 }

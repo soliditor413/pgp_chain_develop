@@ -3,13 +3,13 @@ package spv
 import (
 	"bytes"
 	"errors"
-	"github.com/pgprotocol/pgp-chain/common"
-	"github.com/pgprotocol/pgp-chain/core/events"
-	"github.com/pgprotocol/pgp-chain/log"
-
 	spv "github.com/elastos/Elastos.ELA.SPV/interface"
 	elacom "github.com/elastos/Elastos.ELA/common"
 	"github.com/elastos/Elastos.ELA/core/types/payload"
+	"github.com/pgprotocol/pgp-chain/common"
+	"github.com/pgprotocol/pgp-chain/core/events"
+	"github.com/pgprotocol/pgp-chain/log"
+	"sort"
 )
 
 type NextTurnDPOSInfo struct {
@@ -64,6 +64,9 @@ func GetProducers(elaHeight uint64) ([][]byte, int, error) {
 	}
 	if GetCurrentConsensusMode() == spv.POW {
 		producers = GetCurrentProducers()
+		sort.Slice(producers, func(i, j int) bool {
+			return bytes.Compare(producers[i], producers[j]) < 0
+		})
 		totalCount = len(producers)
 		return producers, totalCount, nil
 	}
@@ -91,6 +94,9 @@ func GetProducers(elaHeight uint64) ([][]byte, int, error) {
 	if err != nil {
 		return nil, totalCount, err
 	}
+	sort.Slice(producers, func(i, j int) bool {
+		return bytes.Compare(producers[i], producers[j]) < 0
+	})
 	return producers, totalCount, nil
 }
 

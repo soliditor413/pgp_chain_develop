@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/elastos/Elastos.ELA/common"
-	"github.com/elastos/Elastos.ELA/common/log"
 	"github.com/elastos/Elastos.ELA/dpos/p2p/peer"
 )
 
@@ -211,7 +210,7 @@ func (v *ConsensusView) DumpInfo() {
 	str := "\n"
 	for _, signer := range v.producers.producers {
 		if v.ProducerIsOnDuty(signer) {
-			duty := log.Color(log.Green, common.BytesToHexString(signer)+" onDuty \n")
+			duty := common.BytesToHexString(signer) + " onDuty \n"
 			str = str + duty
 		} else {
 			str = str + common.BytesToHexString(signer) + " not onDuty \n"
