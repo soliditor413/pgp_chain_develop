@@ -445,7 +445,6 @@ func InitCurrentProducers(engine *pbft.Pbft, config *params.ChainConfig, current
 		log.Info("blocksigner.SelfIsProducer", "", blocksigner.SelfIsProducer)
 		if res {
 			eevents.Notify(dpos.ETUpdateProducers, selfDutyIndex)
-			engine.GetBlockChain().ResetChainEventTimer()
 		}
 		return
 	}
@@ -561,6 +560,7 @@ func SubscriptEvent(eth *Ethereum, engine consensus.Engine) {
 				pbftEngine := engine.(*pbft.Pbft)
 				currentHeader := eth.blockchain.CurrentBlock()
 				InitCurrentProducers(pbftEngine, eth.blockchain.Config(), currentHeader)
+				eth.blockchain.ResetChainEventTimer()
 			case <-startDefaultProducerEvt:
 				pbftEngine := engine.(*pbft.Pbft)
 				StartDefaultProducers(pbftEngine, eth.blockchain.Config(), eth.blockchain.CurrentBlock())
