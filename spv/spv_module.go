@@ -106,6 +106,7 @@ const (
 
 var (
 	IsOnlyCRConsensus = true
+	DefaultProducers  = []string{}
 )
 
 const (
@@ -153,14 +154,16 @@ func NewService(cfg *Config, tmux *event.TypeMux, dynamicArbiterHeight uint64) (
 	switch strings.ToLower(cfg.ActiveNet) {
 	case "testnet", "test", "t":
 		chainParams = config.DefaultParams.TestNet()
+		DefaultProducers = TestnetDefaultProducers
 	case "regnet", "reg", "r":
 		chainParams = config.DefaultParams.RegNet()
 	case "goreli", "g":
 		chainParams = config.DefaultParams.RegNet()
 	default:
 		chainParams = &config.DefaultParams
-
+		DefaultProducers = MainnetProducers
 	}
+	fmt.Println("DefaultProducers 11111 >>>> ", DefaultProducers)
 	spvCfg := &spv.Config{
 		DataDir:             cfg.DataDir,
 		FilterType:          filter.FTReturnSidechainDepositCoinFilter,
