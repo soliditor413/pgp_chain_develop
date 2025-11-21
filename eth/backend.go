@@ -487,6 +487,13 @@ func StartDefaultProducers(engine *pbft.Pbft, config *params.ChainConfig, curren
 		log.Warn(" >>> is not pbft engine")
 		return
 	}
+	if currentBlock.Nonce() != math.MaxUint64 {
+		now := uint64(time.Now().Unix())
+		if now-currentBlock.Time() < uint64(5*time.Minute.Seconds()) {
+			log.Info("already produce block")
+			return
+		}
+	}
 	producers := spv.GetDefaultProducers()
 	totalProducers := len(producers)
 	if totalProducers == 0 {
