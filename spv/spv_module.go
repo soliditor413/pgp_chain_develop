@@ -163,7 +163,6 @@ func NewService(cfg *Config, tmux *event.TypeMux, dynamicArbiterHeight uint64) (
 		chainParams = &config.DefaultParams
 		DefaultProducers = MainnetProducers
 	}
-	fmt.Println("DefaultProducers 11111 >>>> ", DefaultProducers)
 	spvCfg := &spv.Config{
 		DataDir:             cfg.DataDir,
 		FilterType:          filter.FTReturnSidechainDepositCoinFilter,
