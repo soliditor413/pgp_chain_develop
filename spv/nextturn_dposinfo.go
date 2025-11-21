@@ -3,7 +3,6 @@ package spv
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"math"
 
 	spv "github.com/elastos/Elastos.ELA.SPV/interface"
@@ -104,7 +103,6 @@ func GetProducers(elaHeight uint64) ([][]byte, int, error) {
 	if SpvService == nil {
 		return producers, totalCount, errors.New("spv is not start")
 	}
-	fmt.Println("DefaultProducers 22222 >>>> ", DefaultProducers)
 	if GetCurrentConsensusMode() == spv.POW {
 		producers = GetCurrentProducers()
 		sort.Slice(producers, func(i, j int) bool {
