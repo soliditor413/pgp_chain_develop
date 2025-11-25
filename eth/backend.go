@@ -807,6 +807,14 @@ func (s *Ethereum) shouldPreserve(block *types.Block) bool {
 			newNonce := block.Nonce()
 			log.Info("detected chain fork", "oldNonce", oldNonce, "newNonce", newNonce, "SignersCount", s.engine.SignersCount())
 			if oldNonce > 0 && newNonce > 0 && oldNonce != newNonce {
+				if newNonce == math.MaxUint64 {
+					fmt.Println("chose old block")
+					return false
+				}
+				if oldNonce == math.MaxUint64 {
+					fmt.Println("old block is default block chose old block")
+					return true
+				}
 				return newNonce > oldNonce
 			}
 
