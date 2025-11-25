@@ -861,13 +861,15 @@ func (p *Pbft) OnFailedWithdrawTxReceived(id peer.PID, msg *dmsg.FailedWithdrawT
 func (p *Pbft) OnProducersMsg(msg *dmsg.ProducersMsg) {
 	currentProducers := msg.Producers
 	if msg.SpvHeight > spv.GetSpvHeight() {
-		p.needChangeNextTurnProducers = true
+		log.Warn("OnProducersMsg msg.SpvHeight  ", msg.SpvHeight, "native spv height ", spv.GetSpvHeight())
 		return
 	}
 	if p.IsCurrentProducers(currentProducers) {
+		log.Info("OnProducersMsg is currentProducers")
 		return
 	}
 	if p.IsSameProducers(currentProducers) {
+		log.Info("OnProducersMsg change next turn Producers")
 		p.changeNextTurnProduces(msg.ChangeHeight)
 	}
 }

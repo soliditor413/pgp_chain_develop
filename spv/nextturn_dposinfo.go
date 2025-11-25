@@ -3,6 +3,7 @@ package spv
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"math"
 
 	spv "github.com/elastos/Elastos.ELA.SPV/interface"
@@ -80,8 +81,10 @@ func GetTotalProducersCount() int {
 
 func SpvIsWorkingHeight() bool {
 	if nextTurnDposInfo != nil {
+		fmt.Println("SpvIsWorkingHeight >>> ", SpvService.GetBlockListener().BlockHeight(), "nextTurnDposInfo.WorkingHeight", nextTurnDposInfo.WorkingHeight)
 		return SpvService.GetBlockListener().BlockHeight() > nextTurnDposInfo.WorkingHeight
 	}
+	fmt.Println("nextTurnDposInfo is nil")
 	return false
 }
 
