@@ -19,6 +19,7 @@ import (
 	"github.com/elastos/Elastos.ELA/core/types/payload"
 	"github.com/pgprotocol/pgp-chain/chainbridge-core/crypto"
 	"github.com/pgprotocol/pgp-chain/common"
+	"github.com/pgprotocol/pgp-chain/common/math"
 	"github.com/pgprotocol/pgp-chain/consensus"
 	"github.com/pgprotocol/pgp-chain/core"
 	"github.com/pgprotocol/pgp-chain/core/state"
@@ -473,7 +474,9 @@ func (p *Pbft) verifySeal(chain consensus.ChainReader, header *types.Header, par
 		}
 		if confirm.Proposal.ViewOffset == oldConfirm.Proposal.ViewOffset && oldHeader.Hash() != header.Hash() {
 			log.Error("double sign block", "oldHeader.Hash()", oldHeader.Hash().String(), "header.Hash()", header.Hash().String(), "old.miner", oldHeader.Coinbase.String(), "newHeader.Miner", header.Coinbase.String(), "current best height", p.CurrentBlock().NumberU64())
-			return errDoubleSignBlock
+			if oldHeader.Nonce.Uint64() != math.MaxUint64 && header.Nonce.Uint64() != math.MaxUint64 {
+				return errDoubleSignBlock
+			}
 		}
 	}
 
