@@ -812,7 +812,7 @@ func (s *Ethereum) shouldPreserve(block *types.Block) bool {
 					return false
 				}
 				if oldNonce == math.MaxUint64 {
-					fmt.Println("old block is default block chose old block")
+					fmt.Println("old block is default block chose new block")
 					return true
 				}
 				return newNonce > oldNonce
