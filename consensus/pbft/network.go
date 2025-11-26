@@ -8,6 +8,7 @@ package pbft
 import (
 	"bytes"
 	"fmt"
+	"github.com/pgprotocol/pgp-chain/common/math"
 	"sort"
 	"sync/atomic"
 	"time"
@@ -312,6 +313,10 @@ func (p *Pbft) OnInsertBlock(block *types.Block) bool {
 		isBackword := p.dispatcher.GetConsensusView().GetSpvHeight() < block.Nonce()
 		isCurrent := p.IsCurrentProducers(producers)
 		log.Info("current producers spvHeight", "height", p.dispatcher.GetConsensusView().GetSpvHeight(), "block.Nonce()", block.Nonce(), " isBackword", isBackword, "isCurrent", isCurrent)
+		if !isCurrent && p.dispatcher.GetConsensusView().GetSpvHeight() == math.MaxUint64 && block.Nonce() != math.MaxUint64 {
+			p.UpdateCurrentProducers(producers, totalCount, spvHeight)
+			return false
+		}
 		if isBackword && !isCurrent {
 			p.UpdateCurrentProducers(producers, totalCount, spvHeight)
 			go p.AnnounceDAddr()
