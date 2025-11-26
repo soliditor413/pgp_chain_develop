@@ -9,10 +9,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	peer2 "github.com/elastos/Elastos.ELA/p2p/peer"
+	"net"
+
 	"github.com/pgprotocol/pgp-chain/chainbridge-core/dpos_msg"
 	dmsg "github.com/pgprotocol/pgp-chain/dpos/msg"
-	"net"
 
 	"github.com/elastos/Elastos.ELA/common"
 	"github.com/elastos/Elastos.ELA/core/types/payload"
@@ -23,6 +23,7 @@ import (
 	"github.com/elastos/Elastos.ELA/dpos/p2p/peer"
 	dpeer "github.com/elastos/Elastos.ELA/dpos/p2p/peer"
 	elap2p "github.com/elastos/Elastos.ELA/p2p"
+	peer2 "github.com/elastos/Elastos.ELA/p2p/peer"
 )
 
 type NetworkConfig struct {
