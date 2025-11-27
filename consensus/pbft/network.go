@@ -8,6 +8,7 @@ package pbft
 import (
 	"bytes"
 	"fmt"
+	"github.com/pgprotocol/pgp-chain/blocksigner"
 	"github.com/pgprotocol/pgp-chain/common/math"
 	"sort"
 	"sync/atomic"
@@ -876,5 +877,7 @@ func (p *Pbft) OnProducersMsg(msg *dmsg.ProducersMsg) {
 	if p.IsSameProducers(currentProducers) {
 		log.Info("OnProducersMsg change next turn Producers")
 		p.changeNextTurnProduces(msg.ChangeHeight)
+		p.dispatcher.ResetConsensus(p.CurrentBlock().NumberU64() + 1)
+		blocksigner.SelfIsProducer = p.IsProducer()
 	}
 }
