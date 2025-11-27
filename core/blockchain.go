@@ -2492,7 +2492,7 @@ func (bc *BlockChain) addEvilSingerEvents(evilEvents []*EvilSingerEvent) []error
 
 // ResetChainEventTimer resets the chain event timer
 func (bc *BlockChain) ResetChainEventTimer() {
-	duration := 5 * time.Minute
+	duration := 10 * time.Minute
 	resetDuration := func(delay time.Duration) {
 		bc.timerMutex.Lock()
 		defer bc.timerMutex.Unlock()
@@ -2517,7 +2517,7 @@ func (bc *BlockChain) ResetChainEventTimer() {
 }
 
 func (bc *BlockChain) DelayToCheckNetwork() {
-	time.Sleep(10 * time.Second)
+	time.Sleep(5 * time.Minute)
 	header := bc.CurrentHeader()
 	if header == nil {
 		log.Error("DelayToCheckNetwork header is nil")
