@@ -531,6 +531,10 @@ func (p *Pbft) Finalize(chain consensus.ChainReader, header *types.Header, state
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.CalcUncleHash(nil)
 	p.CleanFinalConfirmedBlock(header.Number.Uint64())
+	p.judgeNeedChangeNextTurnProducers()
+}
+
+func (p *Pbft) judgeNeedChangeNextTurnProducers() {
 	dutyIndex := p.dispatcher.GetConsensusView().GetDutyIndex()
 
 	if dutyIndex == 0 && spv.SpvIsWorkingHeight() {
@@ -647,6 +651,7 @@ func (p *Pbft) addConfirmToBlock(header *types.Header, confirm *payload.Confirm)
 	sealHash := SealHash(header)
 	hash, _ := ecom.Uint256FromBytes(sealHash.Bytes())
 	p.dispatcher.FinishedProposal(header.Number.Uint64(), *hash, header.Time)
+	p.judgeNeedChangeNextTurnProducers()
 	return nil
 }
 
