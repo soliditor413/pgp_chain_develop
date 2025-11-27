@@ -150,6 +150,7 @@ func New(cfg *Config) *Routes {
 			if next != nil {
 				current = append(current, next...)
 			}
+			fmt.Println("received ETDirectPeersChanged peers", current)
 			go r.PeersChanged(current)
 		case ETElaMsg:
 			go r.ElaMsg(e.Data.(*MsgEvent))
@@ -341,6 +342,7 @@ cleanup:
 
 func (r *Routes) handlePeersMsg(state *state, peers []peer.PID) {
 	// Compare current peers and new peers to find the difference.
+	fmt.Println("<<<<<<< handlePeersMsg >>>>>>", "peers ", peers)
 	var newPeers = make(map[peer.PID]struct{})
 	for _, pid := range peers {
 		newPeers[pid] = struct{}{}
@@ -386,7 +388,7 @@ func (r *Routes) handlePeersMsg(state *state, peers []peer.PID) {
 	_, isProducer := newPeers[r.selfPID]
 	_, wasProducer := state.peers[r.selfPID]
 	state.peers = newPeers
-
+	fmt.Println("now isProducer >>> ", isProducer, " wasProducer ", wasProducer)
 	// Announce address into P2P network if we become arbiter.
 	if isProducer && !wasProducer {
 		r.announceAddr()
