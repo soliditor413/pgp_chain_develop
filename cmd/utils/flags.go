@@ -833,6 +833,12 @@ var (
 		Usage: "configue developer fee contract address",
 		Value: &cli.StringSlice{},
 	}
+
+	BPosStartHeight = cli.Uint64Flag{
+		Name:  "bpos.start.height",
+		Usage: "BPos consensus start height",
+		Value: math.MaxUint64,
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
