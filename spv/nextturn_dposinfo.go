@@ -229,7 +229,9 @@ func GetCurrentProducers() [][]byte {
 		}
 		spvHeight := GetSpvHeight()
 		crcArbiters, normalArbitrs, err := SpvService.GetArbiters(uint32(spvHeight))
-		log.Error("[GetCurrentCRProducers] read db error", "error", err)
+		if err != nil {
+			log.Error("[GetCurrentCRProducers] read db error", "error", err)
+		}
 		if IsOnlyCRConsensus {
 			return crcArbiters
 		} else {

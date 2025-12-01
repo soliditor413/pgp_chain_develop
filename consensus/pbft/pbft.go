@@ -214,21 +214,9 @@ func New(chainConfig *params.ChainConfig, dataDir string) *Pbft {
 		pbft.subscribeEvent()
 	}
 	tolerance := time.Duration(blockPeriod) * 2 * time.Second
-	pbft.dispatcher = dpos.NewDispatcher(producers, pbft.onConfirm, pbft.onUnConfirm, pbft.checkBPosFullVoteFork,
+	pbft.dispatcher = dpos.NewDispatcher(producers, pbft.onConfirm, pbft.onUnConfirm,
 		tolerance, accpubkey, medianTimeSouce, pbft, chainConfig.GetPbftBlock())
 	return pbft
-}
-
-func (p *Pbft) checkBPosFullVoteFork(count int) bool {
-	dpos.Info("checkBPosFullVoteFork", "p.cfg.BPosFullVoteTime  ", p.cfg.BPosFullVoteTime)
-	if p.timeSource.AdjustedTime().Unix() > p.cfg.BPosFullVoteTime {
-		return false
-	}
-	_, res := p.HasPeersMajorityCount()
-	if res {
-		return p.dispatcher.GetConsensusView().IsMajorityAgree(count)
-	}
-	return count >= p.dispatcher.GetConsensusView().GetMinAcceptVoteCount()
 }
 
 func (p *Pbft) HasPeersMajorityCount() (int, bool) {
@@ -839,14 +827,8 @@ func (p *Pbft) Recover() {
 	p.isRecovering = true
 	minCount := p.dispatcher.GetConsensusView().GetMajorityCount()
 	activePeersCount := 0
-	res := false
 	for {
-		activePeersCount, res = p.HasPeersMajorityCount()
-		if p.timeSource.AdjustedTime().Unix() < p.cfg.BPosFullVoteTime {
-			if !res {
-				minCount = p.dispatcher.GetConsensusView().GetMinAcceptVoteCount()
-			}
-		}
+		activePeersCount, _ = p.HasPeersMajorityCount()
 		fmt.Println("activePeersCount", activePeersCount, " minCount", minCount)
 		if p.IsCurrent() && activePeersCount > 0 &&
 			activePeersCount >= minCount {
