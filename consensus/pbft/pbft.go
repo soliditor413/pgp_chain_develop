@@ -879,11 +879,6 @@ func (p *Pbft) verifyConfirm(confirm *payload.Confirm, elaHeight uint64, timeSta
 		}
 		minSignCount = p.dispatcher.GetConsensusView().GetMajorityCountByTotalSigners(count)
 	}
-	if len(confirm.Votes) < minSignCount {
-		if timeStamp <= p.cfg.BPosFullVoteTime-5 {
-			minSignCount = p.dispatcher.GetConsensusView().GetMinAcceptVoteCount()
-		}
-	}
 	err := dpos.CheckConfirm(confirm, minSignCount)
 	return err
 }

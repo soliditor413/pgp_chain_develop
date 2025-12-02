@@ -286,11 +286,6 @@ func (v *ConsensusView) GetCRMajorityCount() int {
 	return v.producers.GetCRMajorityCount()
 }
 
-func (v *ConsensusView) GetMinAcceptVoteCount() int {
-	return v.producers.GetMajorityCount()
-	//return 9 //The minimum number of validators required to prevent the creation of two competing blocks simultaneously.
-}
-
 func (v *ConsensusView) GetMajorityCountByTotalSigners(totalSigner int) int {
 	return v.producers.GetMajorityCountByTotalSigners(totalSigner)
 }
