@@ -181,7 +181,6 @@ var (
 		utils.PbftMinerAddress,
 		utils.DynamicArbiter,
 		utils.FrozenAccount,
-		utils.BPosFullVoteTime,
 		utils.PledgedBillContract,
 		utils.DeveloperFeeContract,
 	}

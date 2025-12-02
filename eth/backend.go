@@ -187,9 +187,6 @@ func New(ctx *node.ServiceContext, config *Config, node *node.Node) (*Ethereum, 
 		if chainConfig.Pbft.DPoSV2StartHeight <= 0 { //if config is set, use config value
 			chainConfig.Pbft.DPoSV2StartHeight = config.DPoSV2StartHeight
 		}
-		if chainConfig.Pbft.BPosFullVoteTime <= 0 {
-			chainConfig.Pbft.BPosFullVoteTime = config.BPosFullVoteTime
-		}
 		msg2.SetPayloadVersion(msg2.DPoSV2Version)
 		chainConfig.Pbft.NodeVersion = params.VersionWithESC()
 	}

@@ -816,12 +816,6 @@ var (
 		Value: &cli.StringSlice{},
 	}
 
-	BPosFullVoteTime = cli.Uint64Flag{
-		Name:  "bpos.fullVote.time",
-		Usage: "BPos consensus full node vote time",
-		Value: math.MaxUint64,
-	}
-
 	PledgedBillContract = cli.StringFlag{
 		Name:  "pledged.bill.address",
 		Usage: "configue pledged bill address",
@@ -1636,7 +1630,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 
 	cfg.DynamicArbiterHeight = ctx.GlobalUint64(DynamicArbiter.Name)
 	cfg.PledgedBillContract = ctx.GlobalString(PledgedBillContract.Name)
-	cfg.BPosFullVoteTime = ctx.GlobalInt64(BPosFullVoteTime.Name)
 	listAccount, err := MakeDeveloperFeeContractAddress(ctx)
 	if err != nil {
 		log.Error("MakeDeveloperFeeContractAddress failed", "error", err)
@@ -1657,9 +1650,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		}
 		if !ctx.GlobalIsSet(DynamicArbiter.Name) {
 			cfg.DynamicArbiterHeight = 1496588
-		}
-		if !ctx.GlobalIsSet(BPosFullVoteTime.Name) {
-			cfg.BPosFullVoteTime = math.MaxInt64
 		}
 		//if !ctx.GlobalIsSet(FrozenAccount.Name) {
 		//	ctx.GlobalSet(FrozenAccount.Name, "0x6527946c8b26cc203f9674a5e1d8178beeed70c1")
