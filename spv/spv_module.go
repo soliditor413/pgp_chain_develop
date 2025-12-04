@@ -42,6 +42,7 @@ import (
 	elaCrypto "github.com/elastos/Elastos.ELA/crypto"
 	"github.com/elastos/Elastos.ELA/elanet/filter"
 	eevents "github.com/elastos/Elastos.ELA/events"
+	"time"
 )
 
 var (
@@ -149,7 +150,7 @@ func SpvDbInit(spvdataDir string, pledgeBillContract string, signer ethCommon.Ad
 }
 
 // Spv service initialization
-func NewService(cfg *Config, tmux *event.TypeMux, dynamicArbiterHeight uint64) (*Service, error) {
+func NewService(cfg *Config, tmux *event.TypeMux, dynamicArbiterHeight, bPosStartHeight uint64) (*Service, error) {
 	var chainParams *config.Configuration
 	switch strings.ToLower(cfg.ActiveNet) {
 	case "testnet", "test", "t":
@@ -195,6 +196,7 @@ func NewService(cfg *Config, tmux *event.TypeMux, dynamicArbiterHeight uint64) (
 	}
 	err = service.RegisterBlockListener(&BlockListener{
 		dynamicArbiterHeight: dynamicArbiterHeight,
+		bPosStartHeight:      bPosStartHeight,
 	})
 	if err != nil {
 		return nil, err
@@ -1227,4 +1229,19 @@ func Close() {
 		close(stopChn)
 	}
 	fmt.Println("spv close 33333333")
+}
+
+// CheckProducerInactive checks if a producer has been inactive for more than the specified duration
+// This function is used by precompiled contracts to check producer status
+func CheckProducerInactive(producerPubKey []byte, inactiveThreshold time.Duration) (bool, error) {
+	if PbftEngine == nil {
+		return false, errors.New("PbftEngine is nil")
+	}
+
+	// Use the IPbftEngine interface method to get inactive duration
+	duration, neverParticipated := PbftEngine.GetProducerInactiveDuration(producerPubKey)
+	if neverParticipated {
+		return true, nil // Never participated means inactive
+	}
+	return duration > inactiveThreshold, nil
 }

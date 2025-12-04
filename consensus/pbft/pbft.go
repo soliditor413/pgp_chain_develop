@@ -127,6 +127,7 @@ type Pbft struct {
 	isRecovering                bool
 	isSealing                   int32
 	needChangeNextTurnProducers bool
+	producerStats               *ProducerStats // Producer participation statistics
 }
 
 func New(chainConfig *params.ChainConfig, dataDir string) *Pbft {
@@ -139,7 +140,9 @@ func New(chainConfig *params.ChainConfig, dataDir string) *Pbft {
 	cfg := chainConfig.Pbft
 	if cfg == nil {
 		dpos.InitLog(0, 0, 0, logpath)
-		return &Pbft{}
+		return &Pbft{
+			producerStats: NewProducerStats(),
+		}
 	}
 	pbftKeystore := chainConfig.PbftKeyStore
 	password := []byte(chainConfig.PbftKeyStorePassWord)
@@ -182,6 +185,7 @@ func New(chainConfig *params.ChainConfig, dataDir string) *Pbft {
 		notHandledProposal: make(map[string]struct{}),
 		period:             uint64(blockPeriod),
 		timeSource:         medianTimeSouce,
+		producerStats:      NewProducerStats(),
 	}
 	blockPool := dpos.NewBlockPool(pbft.verifyConfirm, pbft.verifyBlock, DBlockSealHash)
 	pbft.blockPool = blockPool
@@ -710,6 +714,15 @@ func (p *Pbft) Close() error {
 	dpos.Info("Pbft Close")
 	p.enableViewLoop = false
 	return nil
+}
+
+// GetProducerInactiveDuration returns the inactive duration for a producer
+// This method is used by precompiled contracts via IPbftEngine interface
+func (p *Pbft) GetProducerInactiveDuration(producerPubKey []byte) (time.Duration, bool) {
+	if p.producerStats == nil {
+		return 0, true
+	}
+	return p.producerStats.GetInactiveDuration(producerPubKey)
 }
 
 func (p *Pbft) SignersCount() int {
