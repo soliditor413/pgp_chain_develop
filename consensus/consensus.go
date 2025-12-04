@@ -25,6 +25,7 @@ import (
 	"github.com/pgprotocol/pgp-chain/core/types"
 	"github.com/pgprotocol/pgp-chain/params"
 	"github.com/pgprotocol/pgp-chain/rpc"
+	"time"
 )
 
 // ChainReader defines a small collection of methods needed to access the local
@@ -139,4 +140,5 @@ type IPbftEngine interface {
 	GetPbftConfig() params.PbftConfig
 	CurrentBlock() *types.Block
 	GetBlockByHeight(height uint64) *types.Block
+	GetProducerInactiveDuration(producerPubKey []byte) (time.Duration, bool)
 }

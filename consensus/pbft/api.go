@@ -70,3 +70,33 @@ func (a *API) Dispatcher() *dpos.Dispatcher {
 func (a *API) Network() *dpos.Network {
 	return a.pbft.network
 }
+
+// GetProducerParticipationInfo returns participation information for a specific producer
+// producerPubKeyHex: hex-encoded producer public key
+func (a *API) GetProducerParticipationInfo(producerPubKeyHex string) *ParticipationInfo {
+	if a.pbft.producerStats == nil {
+		return nil
+	}
+	producerPubKey := common.Hex2Bytes(producerPubKeyHex)
+	return a.pbft.producerStats.GetParticipationInfo(producerPubKey)
+}
+
+// GetProducerInactiveDuration returns how long a producer has been inactive (not participating in consensus)
+// Returns the duration in seconds and a boolean indicating if the producer has never participated
+// producerPubKeyHex: hex-encoded producer public key
+func (a *API) GetProducerInactiveDuration(producerPubKeyHex string) (durationSeconds int64, neverParticipated bool) {
+	if a.pbft.producerStats == nil {
+		return 0, true
+	}
+	producerPubKey := common.Hex2Bytes(producerPubKeyHex)
+	duration, neverParticipated := a.pbft.producerStats.GetInactiveDuration(producerPubKey)
+	return int64(duration.Seconds()), neverParticipated
+}
+
+// GetAllProducersParticipationStats returns participation statistics for all known producers
+func (a *API) GetAllProducersParticipationStats() map[string]*ParticipationInfo {
+	if a.pbft.producerStats == nil {
+		return make(map[string]*ParticipationInfo)
+	}
+	return a.pbft.producerStats.GetAllProducersStats()
+}

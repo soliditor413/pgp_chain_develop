@@ -8,13 +8,13 @@ package pbft
 import (
 	"bytes"
 	"fmt"
-	"github.com/pgprotocol/pgp-chain/blocksigner"
-	"github.com/pgprotocol/pgp-chain/common/math"
 	"sort"
 	"sync/atomic"
 	"time"
 
+	"github.com/pgprotocol/pgp-chain/blocksigner"
 	"github.com/pgprotocol/pgp-chain/common"
+	"github.com/pgprotocol/pgp-chain/common/math"
 	"github.com/pgprotocol/pgp-chain/consensus"
 	"github.com/pgprotocol/pgp-chain/core/types"
 	"github.com/pgprotocol/pgp-chain/dpos"
@@ -281,6 +281,14 @@ func (p *Pbft) broadChangeProducersMsg(changeHeight uint64) {
 func (p *Pbft) OnInsertBlock(block *types.Block) bool {
 	if p.dispatcher == nil {
 		return false
+	}
+
+	// Record producer participation statistics
+	if p.producerStats != nil {
+		producerPubKey, err := extractProducerFromBlock(block)
+		if err == nil && producerPubKey != nil {
+			p.producerStats.RecordParticipation(producerPubKey, block.NumberU64(), block.Time())
+		}
 	}
 
 	log.Info("[OnInsertBlock]",

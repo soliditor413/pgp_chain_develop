@@ -171,6 +171,7 @@ const (
 
 	GetMainChainBlock             uint64 = 1000
 	GetMainChainBlockLatestHeight uint64 = 0
+	CheckProducerInactiveGas      uint64 = 1000 // Gas needed for checking producer inactive status
 )
 
 // Gas discount table for BLS12-381 G1 and G2 multi exponentiation operations
@@ -194,6 +195,7 @@ var (
 	GetMainChainRechargeData  = big.NewInt(1009)
 	GetWithdrawData           = big.NewInt(1010)
 	VerifySmallCrossTx        = big.NewInt(1011)
+	CheckProducerInactive      = big.NewInt(1012)
 )
 
 var (
