@@ -25,6 +25,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"time"
+
 	"github.com/pgprotocol/pgp-chain/accounts/abi"
 	"github.com/pgprotocol/pgp-chain/common"
 	"github.com/pgprotocol/pgp-chain/common/math"
@@ -66,19 +68,20 @@ var PrecompiledContractsHomestead = map[common.Address]PrecompiledContract{
 // PrecompiledContractsByzantium contains the default set of pre-compiled Ethereum
 // contracts used in the Byzantium release.
 var PrecompiledContractsByzantium = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}):                           &ecrecover{},
-	common.BytesToAddress([]byte{2}):                           &sha256hash{},
-	common.BytesToAddress([]byte{3}):                           &ripemd160hash{},
-	common.BytesToAddress([]byte{4}):                           &dataCopy{},
-	common.BytesToAddress([]byte{5}):                           &bigModExp{eip2565: false},
-	common.BytesToAddress([]byte{6}):                           &bn256AddByzantium{},
-	common.BytesToAddress([]byte{7}):                           &bn256ScalarMulByzantium{},
-	common.BytesToAddress([]byte{8}):                           &bn256PairingByzantium{},
-	common.BytesToAddress(params.ArbiterAddress.Bytes()):       &arbiters{},
-	common.BytesToAddress(params.P256VerifyAddress.Bytes()):    &p256Verify{},
-	common.BytesToAddress(params.SignatureVerifyByPbk.Bytes()): &pbkVerifySignature{},
-	common.BytesToAddress(params.PledgeBillVerify.Bytes()):     &pledgeBillVerify{},
-	common.BytesToAddress(params.PledgeBillTokenID.Bytes()):    &pledgeBillTokenID{},
+	common.BytesToAddress([]byte{1}):                            &ecrecover{},
+	common.BytesToAddress([]byte{2}):                            &sha256hash{},
+	common.BytesToAddress([]byte{3}):                            &ripemd160hash{},
+	common.BytesToAddress([]byte{4}):                            &dataCopy{},
+	common.BytesToAddress([]byte{5}):                            &bigModExp{eip2565: false},
+	common.BytesToAddress([]byte{6}):                            &bn256AddByzantium{},
+	common.BytesToAddress([]byte{7}):                            &bn256ScalarMulByzantium{},
+	common.BytesToAddress([]byte{8}):                            &bn256PairingByzantium{},
+	common.BytesToAddress(params.ArbiterAddress.Bytes()):        &arbiters{},
+	common.BytesToAddress(params.P256VerifyAddress.Bytes()):     &p256Verify{},
+	common.BytesToAddress(params.SignatureVerifyByPbk.Bytes()):  &pbkVerifySignature{},
+	common.BytesToAddress(params.PledgeBillVerify.Bytes()):      &pledgeBillVerify{},
+	common.BytesToAddress(params.PledgeBillTokenID.Bytes()):     &pledgeBillTokenID{},
+	common.BytesToAddress(params.CheckProducerInactive.Bytes()): &checkProducerInactive{},
 }
 
 // PrecompiledContractsIstanbul contains the default set of pre-compiled Ethereum
@@ -144,6 +147,7 @@ var PrecompiledContractsBerlin = map[common.Address]PrecompiledContract{
 	common.BytesToAddress(params.PledgeBillTokenVersion.Bytes()):    &pledgeBillPayloadVersion{},
 	common.BytesToAddress(params.GetMainChainBlockByHeight.Bytes()): &getMainChainBlockByHeight{},
 	common.BytesToAddress(params.GetMainChainLatestHeight.Bytes()):  &getMainChainLatestHeight{},
+	common.BytesToAddress(params.CheckProducerInactive.Bytes()):     &checkProducerInactive{},
 }
 
 var PrecompiledContractsShangHai = map[common.Address]PrecompiledContract{
@@ -168,6 +172,7 @@ var PrecompiledContractsShangHai = map[common.Address]PrecompiledContract{
 	common.BytesToAddress(params.GetMainChainRechargeData.Bytes()):  &getMainChainRechargeData{},
 	common.BytesToAddress(params.GetWithdrawData.Bytes()):           &getWithdrawData{},
 	common.BytesToAddress(params.VerifySmallCrossTx.Bytes()):        &verifySmallCrossTx{},
+	common.BytesToAddress(params.CheckProducerInactive.Bytes()):     &checkProducerInactive{},
 }
 
 var (
@@ -1661,4 +1666,61 @@ func (c *verifySmallCrossTx) Run(input []byte) ([]byte, error) {
 	}
 	spv.NotifySmallCrossTx(txn)
 	return true32Byte, nil
+}
+
+// checkProducerInactive checks if a producer has been inactive for more than 3 days
+// Input: producer public key (33 bytes starting from offset 0)
+// Output: 32-byte boolean (true if inactive for more than 3 days, false otherwise)
+type checkProducerInactive struct{}
+
+func (c *checkProducerInactive) RequiredGas(input []byte) uint64 {
+	return params.CheckProducerInactiveGas
+}
+
+func (c *checkProducerInactive) Run(input []byte) ([]byte, error) {
+	// Input validation: need at least 33 bytes for producer public key
+	if len(input) < 33 {
+		log.Warn("checkProducerInactive: invalid input length", "length", len(input))
+		return false32Byte, nil
+	}
+
+	// Extract producer public key (33 bytes)
+	producerPubKey := getData(input, 0, 33)
+
+	// Get Pbft engine from spv module
+	if spv.PbftEngine == nil {
+		log.Warn("checkProducerInactive: PbftEngine is nil")
+		return false32Byte, nil
+	}
+
+	// Type assert to get access to producerStats
+	// We need to import pbft package to do type assertion
+	// Since we can't import pbft here (circular dependency), we'll use a different approach
+	// We'll add a method to IPbftEngine interface or use a helper function in spv module
+
+	// For now, let's use a workaround: access through a helper function
+	// We'll need to add a method to get ProducerStats from the engine
+	// But since we can't modify the interface easily, let's use type assertion with import
+
+	// Actually, we can import pbft here since it's in a different package
+	// Let me check if we can import it...
+
+	// Import pbft package to access ProducerStats
+	// We'll need to add a getter method or use type assertion
+	inactive, err := checkProducerInactiveStatus(producerPubKey)
+	if err != nil {
+		log.Warn("checkProducerInactive: error checking status", "error", err)
+		return false32Byte, nil
+	}
+
+	if inactive {
+		return true32Byte, nil
+	}
+	return false32Byte, nil
+}
+
+// checkProducerInactiveStatus checks if a producer has been inactive for more than 3 days
+func checkProducerInactiveStatus(producerPubKey []byte) (bool, error) {
+	// Use spv module's helper function to check producer inactive status
+	return spv.CheckProducerInactive(producerPubKey, 3*24*time.Hour)
 }

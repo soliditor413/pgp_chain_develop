@@ -810,6 +810,13 @@ var (
 		Usage: "configue the offset blocks to pre-connect to switch to pbft consensus",
 		Value: 2075778,
 	}
+
+	BPosStartHeight = cli.Uint64Flag{
+		Name:  "bpos.start.height",
+		Usage: "BPos consensus start mainChain height",
+		Value: math.MaxUint64,
+	}
+
 	FrozenAccount = cli.StringSliceFlag{
 		Name:  "frozen.account.list",
 		Usage: "config the frozen account list",
@@ -828,10 +835,10 @@ var (
 		Value: &cli.StringSlice{},
 	}
 
-	BPosStartHeight = cli.Uint64Flag{
-		Name:  "bpos.start.height",
-		Usage: "BPos consensus start height",
-		Value: math.MaxUint64,
+	BPosContract = cli.StringFlag{
+		Name:  "bpos.contract",
+		Usage: "BPos nodes contract address",
+		Value: "",
 	}
 )
 
@@ -1654,6 +1661,10 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		//if !ctx.GlobalIsSet(FrozenAccount.Name) {
 		//	ctx.GlobalSet(FrozenAccount.Name, "0x6527946c8b26cc203f9674a5e1d8178beeed70c1")
 		//}
+		err = ctx.GlobalSet(BPosStartHeight.Name, big.NewInt(0).SetUint64(math.MaxUint64).String())
+		if err != nil {
+			log.Error("Set BPosStartHeight failed", "error", err)
+		}
 	case ctx.GlobalBool(RinkebyFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 12346
