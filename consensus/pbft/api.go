@@ -100,3 +100,63 @@ func (a *API) GetAllProducersParticipationStats() map[string]*ParticipationInfo 
 	}
 	return a.pbft.producerStats.GetAllProducersStats()
 }
+
+// IsProducerInactive checks if a producer is inactive (cannot participate in consensus)
+func (a *API) IsProducerInactive(producerPublicKeyHex string) (bool, error) {
+	if a.pbft.producerStats == nil {
+		return false, nil
+	}
+	producerPubKey := common.Hex2Bytes(producerPublicKeyHex)
+	return a.pbft.producerStats.IsInactive(producerPubKey), nil
+}
+
+// GetInactiveProducers returns the list of inactive producer public keys (hex)
+func (a *API) GetInactiveProducers() []string {
+	if a.pbft.producerStats == nil {
+		return []string{}
+	}
+	return a.pbft.producerStats.GetInactiveProducers()
+}
+
+// GetConsecutiveMissedBlocks returns the number of consecutive blocks a producer has missed
+func (a *API) GetConsecutiveMissedBlocks(producerPublicKeyHex string) (uint64, error) {
+	if a.pbft.producerStats == nil {
+		return 0, nil
+	}
+	producerPubKey := common.Hex2Bytes(producerPublicKeyHex)
+	return a.pbft.producerStats.GetConsecutiveMissedBlocks(producerPubKey), nil
+}
+
+// IsProducerInBlacklist checks if a producer is in the permanent blacklist
+func (a *API) IsProducerInBlacklist(producerPublicKeyHex string) (bool, error) {
+	if a.pbft.producerStats == nil {
+		return false, nil
+	}
+	producerPubKey := common.Hex2Bytes(producerPublicKeyHex)
+	return a.pbft.producerStats.IsInBlacklist(producerPubKey), nil
+}
+
+// GetBlacklistEntry returns the blacklist entry for a specific producer
+func (a *API) GetBlacklistEntry(producerPublicKeyHex string) (*BlacklistEntry, error) {
+	if a.pbft.producerStats == nil {
+		return nil, nil
+	}
+	producerPubKey := common.Hex2Bytes(producerPublicKeyHex)
+	return a.pbft.producerStats.GetBlacklistEntry(producerPubKey), nil
+}
+
+// GetBlacklist returns all blacklist entries (permanent records of inactive producers)
+func (a *API) GetBlacklist() map[string]*BlacklistEntry {
+	if a.pbft.producerStats == nil {
+		return make(map[string]*BlacklistEntry)
+	}
+	return a.pbft.producerStats.GetBlacklist()
+}
+
+// GetBlacklistProducerKeys returns the list of producer public keys in the blacklist
+func (a *API) GetBlacklistProducerKeys() []string {
+	if a.pbft.producerStats == nil {
+		return []string{}
+	}
+	return a.pbft.producerStats.GetBlacklistProducerKeys()
+}
