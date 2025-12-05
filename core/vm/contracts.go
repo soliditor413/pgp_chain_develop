@@ -68,20 +68,21 @@ var PrecompiledContractsHomestead = map[common.Address]PrecompiledContract{
 // PrecompiledContractsByzantium contains the default set of pre-compiled Ethereum
 // contracts used in the Byzantium release.
 var PrecompiledContractsByzantium = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}):                            &ecrecover{},
-	common.BytesToAddress([]byte{2}):                            &sha256hash{},
-	common.BytesToAddress([]byte{3}):                            &ripemd160hash{},
-	common.BytesToAddress([]byte{4}):                            &dataCopy{},
-	common.BytesToAddress([]byte{5}):                            &bigModExp{eip2565: false},
-	common.BytesToAddress([]byte{6}):                            &bn256AddByzantium{},
-	common.BytesToAddress([]byte{7}):                            &bn256ScalarMulByzantium{},
-	common.BytesToAddress([]byte{8}):                            &bn256PairingByzantium{},
-	common.BytesToAddress(params.ArbiterAddress.Bytes()):        &arbiters{},
-	common.BytesToAddress(params.P256VerifyAddress.Bytes()):     &p256Verify{},
-	common.BytesToAddress(params.SignatureVerifyByPbk.Bytes()):  &pbkVerifySignature{},
-	common.BytesToAddress(params.PledgeBillVerify.Bytes()):      &pledgeBillVerify{},
-	common.BytesToAddress(params.PledgeBillTokenID.Bytes()):     &pledgeBillTokenID{},
-	common.BytesToAddress(params.CheckProducerInactive.Bytes()): &checkProducerInactive{},
+	common.BytesToAddress([]byte{1}):                             &ecrecover{},
+	common.BytesToAddress([]byte{2}):                             &sha256hash{},
+	common.BytesToAddress([]byte{3}):                             &ripemd160hash{},
+	common.BytesToAddress([]byte{4}):                             &dataCopy{},
+	common.BytesToAddress([]byte{5}):                             &bigModExp{eip2565: false},
+	common.BytesToAddress([]byte{6}):                             &bn256AddByzantium{},
+	common.BytesToAddress([]byte{7}):                             &bn256ScalarMulByzantium{},
+	common.BytesToAddress([]byte{8}):                             &bn256PairingByzantium{},
+	common.BytesToAddress(params.ArbiterAddress.Bytes()):         &arbiters{},
+	common.BytesToAddress(params.P256VerifyAddress.Bytes()):      &p256Verify{},
+	common.BytesToAddress(params.SignatureVerifyByPbk.Bytes()):   &pbkVerifySignature{},
+	common.BytesToAddress(params.PledgeBillVerify.Bytes()):       &pledgeBillVerify{},
+	common.BytesToAddress(params.PledgeBillTokenID.Bytes()):      &pledgeBillTokenID{},
+	common.BytesToAddress(params.CheckProducerInactive.Bytes()):  &checkProducerInactive{},
+	common.BytesToAddress(params.CheckProducerBlacklist.Bytes()): &checkProducerBlacklist{},
 }
 
 // PrecompiledContractsIstanbul contains the default set of pre-compiled Ethereum
@@ -103,6 +104,8 @@ var PrecompiledContractsIstanbul = map[common.Address]PrecompiledContract{
 	common.BytesToAddress(params.PledgeBillTokenID.Bytes()):      &pledgeBillTokenID{},
 	common.BytesToAddress(params.PledgeBillTokenDetail.Bytes()):  &pledgeBillTokenDetail{},
 	common.BytesToAddress(params.PledgeBillTokenVersion.Bytes()): &pledgeBillPayloadVersion{},
+	common.BytesToAddress(params.CheckProducerInactive.Bytes()):  &checkProducerInactive{},
+	common.BytesToAddress(params.CheckProducerBlacklist.Bytes()): &checkProducerBlacklist{},
 }
 
 // PrecompiledContractsBLS contains the set of pre-compiled Ethereum
@@ -148,6 +151,7 @@ var PrecompiledContractsBerlin = map[common.Address]PrecompiledContract{
 	common.BytesToAddress(params.GetMainChainBlockByHeight.Bytes()): &getMainChainBlockByHeight{},
 	common.BytesToAddress(params.GetMainChainLatestHeight.Bytes()):  &getMainChainLatestHeight{},
 	common.BytesToAddress(params.CheckProducerInactive.Bytes()):     &checkProducerInactive{},
+	common.BytesToAddress(params.CheckProducerBlacklist.Bytes()):    &checkProducerBlacklist{},
 }
 
 var PrecompiledContractsShangHai = map[common.Address]PrecompiledContract{
@@ -173,6 +177,7 @@ var PrecompiledContractsShangHai = map[common.Address]PrecompiledContract{
 	common.BytesToAddress(params.GetWithdrawData.Bytes()):           &getWithdrawData{},
 	common.BytesToAddress(params.VerifySmallCrossTx.Bytes()):        &verifySmallCrossTx{},
 	common.BytesToAddress(params.CheckProducerInactive.Bytes()):     &checkProducerInactive{},
+	common.BytesToAddress(params.CheckProducerBlacklist.Bytes()):    &checkProducerBlacklist{},
 }
 
 var (
@@ -1722,4 +1727,42 @@ func (c *checkProducerInactive) Run(input []byte) ([]byte, error) {
 func checkProducerInactiveStatus(producerPubKey []byte) (bool, error) {
 	// Use spv module's helper function to check producer inactive status
 	return spv.CheckProducerInactive(producerPubKey, 3*24*time.Hour)
+}
+
+// checkProducerBlacklist checks if a producer is in the permanent blacklist
+// Input: producer public key (33 bytes starting from offset 0)
+// Output: 32-byte boolean (true if in blacklist, false otherwise)
+type checkProducerBlacklist struct{}
+
+func (c *checkProducerBlacklist) RequiredGas(input []byte) uint64 {
+	return params.CheckProducerBlacklistGas
+}
+
+func (c *checkProducerBlacklist) Run(input []byte) ([]byte, error) {
+	// Input validation: need at least 33 bytes for producer public key
+	if len(input) < 33 {
+		log.Warn("checkProducerBlacklist: invalid input length", "length", len(input))
+		return false32Byte, nil
+	}
+
+	// Extract producer public key (33 bytes)
+	producerPubKey := getData(input, 0, 33)
+
+	// Get Pbft engine from spv module
+	if spv.PbftEngine == nil {
+		log.Warn("checkProducerBlacklist: PbftEngine is nil")
+		return false32Byte, nil
+	}
+
+	// Use spv module's helper function to check producer blacklist status
+	inBlacklist, err := spv.CheckProducerBlacklist(producerPubKey)
+	if err != nil {
+		log.Warn("checkProducerBlacklist: error checking status", "error", err)
+		return false32Byte, nil
+	}
+
+	if inBlacklist {
+		return true32Byte, nil
+	}
+	return false32Byte, nil
 }

@@ -289,6 +289,11 @@ func (p *Pbft) OnInsertBlock(block *types.Block) bool {
 		if err == nil && producerPubKey != nil {
 			p.producerStats.RecordParticipation(producerPubKey, block.NumberU64(), block.Time())
 		}
+
+		// Update block height and check for inactive producers
+		// Get current producers list
+		currentProducers := p.GetCurrentProducers()
+		p.producerStats.UpdateBlockHeight(block.NumberU64(), currentProducers)
 	}
 
 	log.Info("[OnInsertBlock]",
