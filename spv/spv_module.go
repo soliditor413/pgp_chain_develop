@@ -29,6 +29,8 @@ import (
 
 	"golang.org/x/net/context"
 
+	"time"
+
 	"github.com/elastos/Elastos.ELA.SPV/bloom"
 	spv "github.com/elastos/Elastos.ELA.SPV/interface"
 	"github.com/elastos/Elastos.ELA.SPV/util"
@@ -42,7 +44,6 @@ import (
 	elaCrypto "github.com/elastos/Elastos.ELA/crypto"
 	"github.com/elastos/Elastos.ELA/elanet/filter"
 	eevents "github.com/elastos/Elastos.ELA/events"
-	"time"
 )
 
 var (
@@ -1244,4 +1245,15 @@ func CheckProducerInactive(producerPubKey []byte, inactiveThreshold time.Duratio
 		return true, nil // Never participated means inactive
 	}
 	return duration > inactiveThreshold, nil
+}
+
+// CheckProducerBlacklist checks if a producer is in the permanent blacklist
+// This function is used by precompiled contracts to check producer blacklist status
+func CheckProducerBlacklist(producerPubKey []byte) (bool, error) {
+	if PbftEngine == nil {
+		return false, errors.New("PbftEngine is nil")
+	}
+
+	// Use the IPbftEngine interface method to check blacklist
+	return PbftEngine.IsProducerInBlacklist(producerPubKey), nil
 }

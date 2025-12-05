@@ -140,8 +140,9 @@ func New(chainConfig *params.ChainConfig, dataDir string) *Pbft {
 	cfg := chainConfig.Pbft
 	if cfg == nil {
 		dpos.InitLog(0, 0, 0, logpath)
+		producerStats, _ := NewProducerStats(dataDir)
 		return &Pbft{
-			producerStats: NewProducerStats(),
+			producerStats: producerStats,
 		}
 	}
 	pbftKeystore := chainConfig.PbftKeyStore
@@ -185,7 +186,7 @@ func New(chainConfig *params.ChainConfig, dataDir string) *Pbft {
 		notHandledProposal: make(map[string]struct{}),
 		period:             uint64(blockPeriod),
 		timeSource:         medianTimeSouce,
-		producerStats:      NewProducerStats(),
+		producerStats:      nil, // Will be initialized below
 	}
 	blockPool := dpos.NewBlockPool(pbft.verifyConfirm, pbft.verifyBlock, DBlockSealHash)
 	pbft.blockPool = blockPool
@@ -220,6 +221,16 @@ func New(chainConfig *params.ChainConfig, dataDir string) *Pbft {
 	tolerance := time.Duration(blockPeriod) * 2 * time.Second
 	pbft.dispatcher = dpos.NewDispatcher(producers, pbft.onConfirm, pbft.onUnConfirm,
 		tolerance, accpubkey, medianTimeSouce, pbft, chainConfig.GetPbftBlock())
+	
+	// Initialize producer stats with persistence
+	producerStats, err := NewProducerStats(dataDir)
+	if err != nil {
+		log.Error("Failed to initialize producer stats", "error", err)
+		// Continue without persistence if initialization fails
+		producerStats, _ = NewProducerStats("")
+	}
+	pbft.producerStats = producerStats
+	
 	return pbft
 }
 
@@ -713,6 +724,9 @@ func (p *Pbft) APIs(chain consensus.ChainReader) []rpc.API {
 func (p *Pbft) Close() error {
 	dpos.Info("Pbft Close")
 	p.enableViewLoop = false
+	if p.producerStats != nil {
+		return p.producerStats.Close()
+	}
 	return nil
 }
 
@@ -723,6 +737,15 @@ func (p *Pbft) GetProducerInactiveDuration(producerPubKey []byte) (time.Duration
 		return 0, true
 	}
 	return p.producerStats.GetInactiveDuration(producerPubKey)
+}
+
+// IsProducerInBlacklist checks if a producer is in the permanent blacklist
+// This method is used by precompiled contracts via IPbftEngine interface
+func (p *Pbft) IsProducerInBlacklist(producerPubKey []byte) bool {
+	if p.producerStats == nil {
+		return false
+	}
+	return p.producerStats.IsInBlacklist(producerPubKey)
 }
 
 func (p *Pbft) SignersCount() int {
