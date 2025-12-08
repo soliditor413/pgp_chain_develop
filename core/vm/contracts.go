@@ -24,7 +24,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-
 	"time"
 
 	"github.com/pgprotocol/pgp-chain/accounts/abi"
@@ -721,7 +720,7 @@ func (c *arbiters) Run(input []byte) ([]byte, error) {
 }
 
 const (
-	p256VerifyInputLength = 193
+	p256VerifyInputLength = 194
 )
 
 var (
@@ -737,6 +736,9 @@ func (c *p256Verify) RequiredGas(input []byte) uint64 {
 
 func (c *p256Verify) Run(input []byte) ([]byte, error) {
 	// Make sure the input is valid (correct length)
+	if len(input) != p256VerifyInputLength {
+		return nil, errP256VerifyInvalidInputLength
+	}
 	//length := getData(input, 0, 32)
 	pubkey := getData(input, 0, 33)
 	messageSize := getData(input, 33, 32)
@@ -1740,7 +1742,7 @@ func (c *checkProducerBlacklist) RequiredGas(input []byte) uint64 {
 
 func (c *checkProducerBlacklist) Run(input []byte) ([]byte, error) {
 	// Input validation: need at least 33 bytes for producer public key
-	if len(input) < 33 {
+	if len(input) != 33 {
 		log.Warn("checkProducerBlacklist: invalid input length", "length", len(input))
 		return false32Byte, nil
 	}
