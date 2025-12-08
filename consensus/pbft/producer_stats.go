@@ -24,7 +24,7 @@ import (
 
 const (
 	// InactiveThreshold is the number of consecutive blocks a producer must miss to be marked as inactive
-	InactiveThreshold uint64 = 2000
+	InactiveThreshold uint64 = 20 //2000
 	// producerStatsDBName is the database name for storing producer statistics
 	producerStatsDBName = "producer_stats"
 	// CleanupThresholdDays is the number of days after which inactive producers not in current list can be cleaned up
@@ -264,7 +264,6 @@ func (ps *ProducerStats) UpdateBlockHeight(blockHeight uint64, currentProducers 
 		// If lastBlockHeight is less than current block height, they missed this block
 		if ps.lastBlockHeight[producerKey] < blockHeight {
 			ps.consecutiveMissedBlocks[producerKey]++
-
 			// Check if should be marked as inactive
 			if ps.consecutiveMissedBlocks[producerKey] >= InactiveThreshold {
 				if !ps.isInactive[producerKey] {
