@@ -75,6 +75,7 @@ var (
 		LondonBlock:         big.NewInt(3),
 		ShanghaiTime:        newUint64(1761657650),
 		DeveloperFeeTime:    newUint64(1761657650),
+		ChangeMinerFeeTime:  newUint64(math.MaxUint64),
 		Clique: &CliqueConfig{
 			Period: 5,
 			Epoch:  30000,
@@ -147,6 +148,7 @@ var (
 		LondonBlock:         big.NewInt(3),
 		ShanghaiTime:        newUint64(1745049395),
 		DeveloperFeeTime:    newUint64(1745049395),
+		ChangeMinerFeeTime:  newUint64(math.MaxUint64),
 
 		Clique: &CliqueConfig{
 			Period: 15,
@@ -220,6 +222,7 @@ var (
 		LondonBlock:         big.NewInt(3),
 		ShanghaiTime:        newUint64(1745049395),
 		DeveloperFeeTime:    newUint64(1745049395),
+		ChangeMinerFeeTime:  newUint64(math.MaxUint64),
 		Clique: &CliqueConfig{
 			Period: 15,
 			Epoch:  30000,
@@ -289,6 +292,7 @@ var (
 		BerlinBlock:         big.NewInt(math.MaxInt64),
 		LondonBlock:         big.NewInt(math.MaxInt64),
 		DeveloperFeeTime:    newUint64(math.MaxInt64),
+		ChangeMinerFeeTime:  newUint64(math.MaxUint64),
 		Clique: &CliqueConfig{
 			Period: 15,
 			Epoch:  30000,
@@ -438,10 +442,11 @@ type ChainConfig struct {
 
 	// Fork scheduling was switched from blocks to timestamps here
 
-	ShanghaiTime     *uint64 `json:"shanghaiTime,omitempty"` // Shanghai switch time (nil = no fork, 0 = already on shanghai)
-	CancunTime       *uint64 `json:"cancunTime,omitempty"`   // Cancun switch time (nil = no fork, 0 = already on cancun)
-	PragueTime       *uint64 `json:"pragueTime,omitempty"`   // Prague switch time (nil = no fork, 0 = already on prague)
-	DeveloperFeeTime *uint64 `json:"developerFeeTime,omitempty"`
+	ShanghaiTime       *uint64 `json:"shanghaiTime,omitempty"` // Shanghai switch time (nil = no fork, 0 = already on shanghai)
+	CancunTime         *uint64 `json:"cancunTime,omitempty"`   // Cancun switch time (nil = no fork, 0 = already on cancun)
+	PragueTime         *uint64 `json:"pragueTime,omitempty"`   // Prague switch time (nil = no fork, 0 = already on prague)
+	DeveloperFeeTime   *uint64 `json:"developerFeeTime,omitempty"`
+	ChangeMinerFeeTime *uint64 `json:"changeMinerFeeTime,omitempty"`
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
 	// the network that triggers the consensus upgrade.
 	TerminalTotalDifficulty *big.Int `json:"terminalTotalDifficulty,omitempty"`
@@ -640,6 +645,10 @@ func (c *ChainConfig) IsPrague(time uint64) bool {
 
 func (c *ChainConfig) IsdeveloperSplitfeeTime(time uint64) bool {
 	return isTimestampForked(c.DeveloperFeeTime, time)
+}
+
+func (c *ChainConfig) IsChangeMinerFeeTime(time uint64) bool {
+	return isTimestampForked(c.ChangeMinerFeeTime, time)
 }
 
 // IsChainIDFork returns whether num represents a block number after the ChainID fork
