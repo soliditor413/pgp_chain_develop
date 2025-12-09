@@ -340,8 +340,14 @@ func (st *StateTransition) TransitionDb() (result *ExecutionResult, err error) {
 			if num != 1 {
 				return &ExecutionResult{st.gasUsed(), vmerr, ret}, vm.ErrDeveloperSplitFee
 			}
-			//MinerReward 35% OtherReward 65%
-			pgFee := big.NewInt(0).Mul(minerFee, big.NewInt(65))
+			pgFee := big.NewInt(0)
+			if st.evm.ChainConfig().IsChangeMinerFeeTime(st.evm.Time.Uint64()) {
+				//MinerReward 70% OtherReward 30%
+				pgFee = big.NewInt(0).Mul(minerFee, big.NewInt(30))
+			} else {
+				//MinerReward 35% OtherReward 65%
+				pgFee = big.NewInt(0).Mul(minerFee, big.NewInt(65))
+			}
 			pgFee = big.NewInt(0).Div(pgFee, big.NewInt(100))
 			pgAddress := common.HexToAddress(developerAddress[0])
 			st.state.AddBalance(pgAddress, pgFee)
