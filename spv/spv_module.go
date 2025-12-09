@@ -1222,7 +1222,6 @@ func GetMinGasPrice(spvHeight uint32) (*big.Int, error) {
 }
 
 func Close() {
-	fmt.Println("spv close 111111")
 	spvdb := SpvService.GetDatabase()
 	if spvdb != nil {
 		fmt.Println("spv close 2222222")
