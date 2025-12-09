@@ -61,10 +61,11 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"path/filepath"
+
 	"github.com/elastic/gosigar"
 	"golang.org/x/crypto/ripemd160"
 	"gopkg.in/urfave/cli.v1"
-	"path/filepath"
 )
 
 const (
@@ -511,7 +512,7 @@ func startSpv(ctx *cli.Context, stack *node.Node) {
 	}
 
 	go validators.NewBPosValidator(
-		"",
+		ctx.GlobalString(utils.BPosContract.Name),
 		bPosStartHeight,
 	).Start()
 }
