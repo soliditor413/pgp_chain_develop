@@ -807,13 +807,13 @@ var (
 	}
 	DynamicArbiter = cli.Uint64Flag{
 		Name:  "spv.arbiter.height",
-		Usage: "configue the offset blocks to pre-connect to switch to pbft consensus",
+		Usage: "configue the offset blocks to pre-connect to switch to pbft consensus, spv dynamic arbiter height",
 		Value: 2075778,
 	}
 
-	BPosStartHeight = cli.Uint64Flag{
-		Name:  "bpos.start.height",
-		Usage: "BPos consensus start mainChain height",
+	DynamicArbiterEndBlock = cli.Uint64Flag{
+		Name:  "spv.arbiter.end.height",
+		Usage: "configue the blocks to finish dynamic arbiter, spv dynamic arbiter end height",
 		Value: math.MaxUint64,
 	}
 
@@ -833,12 +833,6 @@ var (
 		Name:  "developer.fee.contract",
 		Usage: "configue developer fee contract address",
 		Value: &cli.StringSlice{},
-	}
-
-	BPosContract = cli.StringFlag{
-		Name:  "bpos.contract",
-		Usage: "BPos nodes contract address",
-		Value: "",
 	}
 )
 
@@ -1657,13 +1651,15 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		}
 		if !ctx.GlobalIsSet(DynamicArbiter.Name) {
 			cfg.DynamicArbiterHeight = 1496588
+			ctx.GlobalSet(DynamicArbiter.Name, big.NewInt(0).SetUint64(cfg.DynamicArbiterHeight).String())
 		}
 		//if !ctx.GlobalIsSet(FrozenAccount.Name) {
 		//	ctx.GlobalSet(FrozenAccount.Name, "0x6527946c8b26cc203f9674a5e1d8178beeed70c1")
 		//}
-		err = ctx.GlobalSet(BPosStartHeight.Name, big.NewInt(0).SetUint64(math.MaxUint64).String())
+		//TODO set this value when publish this network
+		err = ctx.GlobalSet(DynamicArbiterEndBlock.Name, big.NewInt(0).SetUint64(math.MaxUint64).String())
 		if err != nil {
-			log.Error("Set BPosStartHeight failed", "error", err)
+			log.Error("Set DynamicArbiterEndBlock failed", "error", err)
 		}
 	case ctx.GlobalBool(RinkebyFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {

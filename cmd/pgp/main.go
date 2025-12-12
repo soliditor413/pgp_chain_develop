@@ -48,7 +48,6 @@ import (
 	"github.com/pgprotocol/pgp-chain/node"
 	"github.com/pgprotocol/pgp-chain/smallcrosstx"
 	"github.com/pgprotocol/pgp-chain/spv"
-	"github.com/pgprotocol/pgp-chain/validators"
 	"github.com/pgprotocol/pgp-chain/withdrawfailedtx"
 
 	// Force-load the tracer engines to trigger registration
@@ -182,11 +181,10 @@ var (
 		utils.PbftDposPort,
 		utils.PbftMinerAddress,
 		utils.DynamicArbiter,
+		utils.DynamicArbiterEndBlock,
 		utils.FrozenAccount,
 		utils.PledgedBillContract,
 		utils.DeveloperFeeContract,
-		utils.BPosStartHeight,
-		utils.BPosContract,
 	}
 
 	rpcFlags = []cli.Flag{
@@ -441,7 +439,7 @@ func startSpv(ctx *cli.Context, stack *node.Node) {
 		dynamicArbiterHeight uint64
 		pledgedBillContract  string
 	)
-	bPosStartHeight := ctx.GlobalUint64(utils.BPosStartHeight.Name)
+	dynamicArbiterEndHeight := ctx.GlobalUint64(utils.DynamicArbiterEndBlock.Name)
 	if ctx.GlobalString(utils.SpvMonitoringAddrFlag.Name) != "" {
 		// --spvmoniaddr parameter is provided, set the SPV monitor address accordingly
 		log.Info("SPV Start Monitoring... ", "SpvMonitoringAddr", ctx.GlobalString(utils.SpvMonitoringAddrFlag.Name))
@@ -499,7 +497,7 @@ func startSpv(ctx *cli.Context, stack *node.Node) {
 		return addr
 	}
 	spv.SpvDbInit(SpvDataDir, pledgedBillContract, spv.GetDefaultSingerAddr(), client)
-	if spvService, err := spv.NewService(spvCfg, stack.EventMux(), dynamicArbiterHeight, bPosStartHeight); err != nil {
+	if spvService, err := spv.NewService(spvCfg, stack.EventMux(), dynamicArbiterHeight, dynamicArbiterEndHeight); err != nil {
 		utils.Fatalf("SPV service init error: %v", err)
 	} else {
 		MinedBlockSub := stack.EventMux().Subscribe(events.MinedBlockEvent{})
@@ -510,11 +508,6 @@ func startSpv(ctx *cli.Context, stack *node.Node) {
 		stack.EventMux().Post(events.InitCurrentProducers{})
 		spv.InitNextTurnDposInfo()
 	}
-
-	go validators.NewBPosValidator(
-		ctx.GlobalString(utils.BPosContract.Name),
-		bPosStartHeight,
-	).Start()
 }
 
 // startNode boots up the system node and all registered protocols, after which
