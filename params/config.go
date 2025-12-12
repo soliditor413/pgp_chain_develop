@@ -97,13 +97,15 @@ var (
 				"03cef969f3d4abdd1669f0ac7b8ff5985b21e5ed3aaaabaf552046f81de0e40358",
 				"03f66f89112812ef12649e51192083a3787843d92efea0cccbc4c349e3fd6d6eb3",
 			},
-			PrintLevel:     0,
-			MaxLogsSize:    0,
-			MaxPerLogSize:  0,
-			Magic:          202511,
-			IPAddress:      "",
-			DPoSPort:       0,
-			MaxNodePerHost: 100,
+			PrintLevel:        0,
+			MaxLogsSize:       0,
+			MaxPerLogSize:     0,
+			Magic:             202511,
+			IPAddress:         "",
+			DPoSPort:          0,
+			MaxNodePerHost:    100,
+			ValidatorContract: "",
+			BPosStartHeight:   math.MaxUint64,
 		},
 	}
 
@@ -171,13 +173,15 @@ var (
 				"02bf9e37b3db0cbe86acf76a76578c6b17b4146df101ec934a00045f7d201f06dd",
 				"03111f1247c66755d369a8c8b3a736dfd5cf464ca6735b659533cbe1268cd102a9",
 			},
-			PrintLevel:     0,
-			MaxLogsSize:    0,
-			MaxPerLogSize:  0,
-			Magic:          202507,
-			IPAddress:      "",
-			DPoSPort:       0,
-			MaxNodePerHost: 100,
+			PrintLevel:        0,
+			MaxLogsSize:       0,
+			MaxPerLogSize:     0,
+			Magic:             202507,
+			IPAddress:         "",
+			DPoSPort:          0,
+			MaxNodePerHost:    100,
+			ValidatorContract: "",
+			BPosStartHeight:   math.MaxUint64,
 		},
 	}
 
@@ -244,13 +248,15 @@ var (
 				"03c559769d5f7bb64c28f11760cb36a2933596ca8a966bc36a09d50c24c48cc3e8",
 				"03b5d90257ad24caf22fa8a11ce270ea57f3c2597e52322b453d4919ebec4e6300",
 			},
-			PrintLevel:     0,
-			MaxLogsSize:    0,
-			MaxPerLogSize:  0,
-			Magic:          202505,
-			IPAddress:      "",
-			DPoSPort:       0,
-			MaxNodePerHost: 100,
+			PrintLevel:        0,
+			MaxLogsSize:       0,
+			MaxPerLogSize:     0,
+			Magic:             202505,
+			IPAddress:         "",
+			DPoSPort:          0,
+			MaxNodePerHost:    100,
+			ValidatorContract: "",
+			BPosStartHeight:   math.MaxUint64,
 		},
 	}
 
@@ -504,6 +510,8 @@ type PbftConfig struct {
 	MaxNodePerHost    uint32   `json:"maxnodeperhost"` //MaxNodePerHost defines max nodes that one host can establish.
 	DPoSV2StartHeight uint32   `json:"dposv2startheight"`
 	NodeVersion       string
+	ValidatorContract string `json:"validatorcontract,omitempty"`
+	BPosStartHeight   uint64 `json:"bPosStartHeight,omitempty"`
 }
 
 func (p *PbftConfig) String() string {

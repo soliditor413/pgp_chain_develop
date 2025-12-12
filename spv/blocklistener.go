@@ -30,11 +30,11 @@ func (param *auxParam) clean() {
 }
 
 type BlockListener struct {
-	blockNumber          uint32
-	param                auxParam
-	handle               func(block interface{}) error
-	dynamicArbiterHeight uint64
-	bPosStartHeight      uint64
+	blockNumber             uint32
+	param                   auxParam
+	handle                  func(block interface{}) error
+	dynamicArbiterHeight    uint64
+	dynamicArbiterEndHeight uint64
 }
 
 func (l *BlockListener) GetDynamicArbiterHeight() uint64 {
@@ -42,7 +42,7 @@ func (l *BlockListener) GetDynamicArbiterHeight() uint64 {
 }
 
 func (l *BlockListener) IsBPosHeight() bool {
-	if uint64(l.blockNumber) >= l.bPosStartHeight {
+	if uint64(l.blockNumber) >= l.dynamicArbiterEndHeight {
 		return true
 	}
 	return false
@@ -56,14 +56,12 @@ func (l *BlockListener) NotifyBlock(block *util.Block, isCurrent bool) {
 		}
 		l.blockNumber = block.Height
 		l.StoreAuxBlock(block)
-		log.Info("BlockListener handle block ", "height", l.blockNumber, "l.dynamicArbiterHeight ", l.dynamicArbiterHeight, "l.bPosStartHeight", l.bPosStartHeight)
+		log.Info("BlockListener handle block ", "height", l.blockNumber, "l.dynamicArbiterHeight ", l.dynamicArbiterHeight, "l.dynamicArbiterEndHeight", l.dynamicArbiterEndHeight)
 
-		if uint64(l.blockNumber) < l.dynamicArbiterHeight {
+		if uint64(l.blockNumber) < l.dynamicArbiterHeight || uint64(l.blockNumber) >= l.dynamicArbiterEndHeight {
 			return
 		}
-		if !l.IsBPosHeight() {
-			l.onBlockHandled(l.param.block)
-		}
+		l.onBlockHandled(l.param.block)
 	}
 
 	if l.handle != nil {

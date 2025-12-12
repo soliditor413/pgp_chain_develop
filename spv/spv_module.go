@@ -151,7 +151,7 @@ func SpvDbInit(spvdataDir string, pledgeBillContract string, signer ethCommon.Ad
 }
 
 // Spv service initialization
-func NewService(cfg *Config, tmux *event.TypeMux, dynamicArbiterHeight, bPosStartHeight uint64) (*Service, error) {
+func NewService(cfg *Config, tmux *event.TypeMux, dynamicArbiterHeight, dynamicArbiterEndHeight uint64) (*Service, error) {
 	var chainParams *config.Configuration
 	switch strings.ToLower(cfg.ActiveNet) {
 	case "testnet", "test", "t":
@@ -196,8 +196,8 @@ func NewService(cfg *Config, tmux *event.TypeMux, dynamicArbiterHeight, bPosStar
 		return nil, err
 	}
 	err = service.RegisterBlockListener(&BlockListener{
-		dynamicArbiterHeight: dynamicArbiterHeight,
-		bPosStartHeight:      bPosStartHeight,
+		dynamicArbiterHeight:    dynamicArbiterHeight,
+		dynamicArbiterEndHeight: dynamicArbiterEndHeight,
 	})
 	if err != nil {
 		return nil, err
