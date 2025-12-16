@@ -59,6 +59,7 @@ func (l *BlockListener) NotifyBlock(block *util.Block, isCurrent bool) {
 		log.Info("BlockListener handle block ", "height", l.blockNumber, "l.dynamicArbiterHeight ", l.dynamicArbiterHeight, "l.dynamicArbiterEndHeight", l.dynamicArbiterEndHeight)
 
 		if uint64(l.blockNumber) < l.dynamicArbiterHeight || uint64(l.blockNumber) >= l.dynamicArbiterEndHeight {
+			nextTurnDposInfo = nil
 			return
 		}
 		l.onBlockHandled(l.param.block)
@@ -166,6 +167,7 @@ func IsNexturnBlock(block interface{}) bool {
 func InitNextTurnDposInfo() {
 	if SpvService.GetBlockListener().(*BlockListener).IsBPosHeight() {
 		log.Warn("init next turn dpos info error", "height", SpvService.GetBlockListener().BlockHeight())
+		nextTurnDposInfo = nil
 		return
 	}
 	workingHeight, crcArbiters, normalArbiters, err := SpvService.GetNextArbiters()

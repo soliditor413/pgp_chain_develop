@@ -278,13 +278,13 @@ func (p *Pbft) broadChangeProducersMsg(changeHeight uint64) {
 	p.BroadMessageToAllPeers(producerMsg)
 }
 
-func (p *Pbft) OnInsertBlock(block *types.Block) bool {
+func (p *Pbft) OnInsertBlock(block *types.Block, isInit bool) bool {
 	if p.dispatcher == nil {
 		return false
 	}
 
 	// Record producer participation statistics
-	if p.producerStats != nil {
+	if p.producerStats != nil && !isInit {
 		producerPubKey, err := extractProducerFromBlock(block)
 		if err == nil && producerPubKey != nil {
 			p.producerStats.RecordParticipation(producerPubKey, block.NumberU64(), block.Time())
@@ -337,16 +337,46 @@ func (p *Pbft) OnInsertBlock(block *types.Block) bool {
 			go p.Recover()
 			return true
 		}
+	} else if p.bPosValidator.IsBPosFork(block.NumberU64()) {
+		producers, totalCount, err := p.bPosValidator.GetCurrentValidators(block.NumberU64())
+		if err != nil {
+			log.Error("get dpos validator failed", "error", err)
+			return false
+		}
+		isCurrent := p.IsCurrentProducers(producers)
+		if isCurrent {
+			return false
+		}
+		p.UpdateCurrentProducers(producers, int(totalCount), 0)
+		go p.AnnounceDAddr()
+		go p.Recover()
+		return true
 	}
 	return false
 }
 
 func (p *Pbft) changeNextTurnProduces(changeHeight uint64) {
-	p.dispatcher.GetConsensusView().ChangeCurrentProducers(changeHeight, spv.GetSpvHeight())
+	spvHeight := spv.GetSpvHeight()
+	if p.bPosValidator.IsBPosFork(changeHeight) {
+		spvHeight = 0
+	}
+	p.dispatcher.GetConsensusView().ChangeCurrentProducers(changeHeight, spvHeight)
 	go p.AnnounceDAddr()
 	go p.Recover()
 	p.dispatcher.GetConsensusView().DumpInfo()
 	spv.SetCurrentProducers(p.GetCurrentProducers())
+}
+
+func (p *Pbft) OnBlockEvent(block *types.Block) {
+	res := p.bPosValidator.OnBlockEvent(block)
+	if !res {
+		return
+	}
+	curProducers := p.dispatcher.GetConsensusView().GetProducers()
+	isSame := p.dispatcher.GetConsensusView().IsSameProducers(curProducers)
+	if !isSame {
+		go p.AnnounceDAddr()
+	}
 }
 
 func (p *Pbft) GetSelfDutyIndex() int {
