@@ -32,6 +32,7 @@ import (
 	"github.com/pgprotocol/pgp-chain/rpc"
 	"github.com/pgprotocol/pgp-chain/smallcrosstx"
 	"github.com/pgprotocol/pgp-chain/spv"
+	"github.com/pgprotocol/pgp-chain/validators"
 	"github.com/pgprotocol/pgp-chain/withdrawfailedtx"
 
 	ecom "github.com/elastos/Elastos.ELA/common"
@@ -128,6 +129,7 @@ type Pbft struct {
 	isSealing                   int32
 	needChangeNextTurnProducers bool
 	producerStats               *ProducerStats // Producer participation statistics
+	bPosValidator               *validators.BposValidator
 }
 
 func New(chainConfig *params.ChainConfig, dataDir string) *Pbft {
@@ -221,7 +223,7 @@ func New(chainConfig *params.ChainConfig, dataDir string) *Pbft {
 	tolerance := time.Duration(blockPeriod) * 2 * time.Second
 	pbft.dispatcher = dpos.NewDispatcher(producers, pbft.onConfirm, pbft.onUnConfirm,
 		tolerance, accpubkey, medianTimeSouce, pbft, chainConfig.GetPbftBlock())
-	
+
 	// Initialize producer stats with persistence
 	producerStats, err := NewProducerStats(dataDir)
 	if err != nil {
@@ -230,7 +232,13 @@ func New(chainConfig *params.ChainConfig, dataDir string) *Pbft {
 		producerStats, _ = NewProducerStats("")
 	}
 	pbft.producerStats = producerStats
-	
+
+	bPosValidator, err := validators.NewBPosValidator(chainConfig.Pbft.ValidatorContract, chainConfig.Pbft.BPosStartHeight)
+	if err != nil {
+		log.Error("Failed to initialize bpos validator", "error", err)
+		return nil
+	}
+	pbft.bPosValidator = bPosValidator
 	return pbft
 }
 
@@ -267,6 +275,14 @@ func (p *Pbft) subscribeEvent() {
 			producers := e.Data.([]peer.PID)
 			log.Info("update next producers", "totalCount", spv.GetTotalProducersCount())
 			p.dispatcher.GetConsensusView().UpdateNextProducers(producers, spv.GetTotalProducersCount())
+		case dpos.ETNextValidators:
+			nextTurn := e.Data.(validators.NextTurnValidators)
+			log.Info("update next validators", "totalCount", nextTurn.TotalCount, "nextTurn", nextTurn.WorkingHeight)
+			producers := make([]peer.PID, len(nextTurn.Validators))
+			for i, v := range nextTurn.Validators {
+				copy(producers[i][:], v)
+			}
+			p.dispatcher.GetConsensusView().UpdateNextProducers(producers, nextTurn.TotalCount)
 		case dpos.ETOnSPVHeight:
 			height := e.Data.(uint32)
 			if spv.GetWorkingHeight() >= height {
@@ -281,11 +297,8 @@ func (p *Pbft) subscribeEvent() {
 				}
 			}
 			if p.needChangeNextTurnProducers {
-				if spv.SpvIsWorkingHeight() {
-					p.changeNextTurnProduces(spv.GetSpvHeight() + 1)
-					p.needChangeNextTurnProducers = false
-				}
-
+				p.changeNextTurnProduces(p.GetBlockChain().CurrentBlock().NumberU64() + 1)
+				p.needChangeNextTurnProducers = false
 			}
 		case dpos.ETSmallCroTx:
 			if croTx, ok := e.Data.(*smallcrosstx.ETSmallCrossTx); ok {
@@ -539,7 +552,10 @@ func (p *Pbft) Finalize(chain consensus.ChainReader, header *types.Header, state
 
 func (p *Pbft) judgeNeedChangeNextTurnProducers() {
 	dutyIndex := p.dispatcher.GetConsensusView().GetDutyIndex()
-
+	if dutyIndex == 0 && p.bPosValidator.IsWorkingHeight(p.GetBlockChain().CurrentBlock().NumberU64()) {
+		p.needChangeNextTurnProducers = true
+		return
+	}
 	if dutyIndex == 0 && spv.SpvIsWorkingHeight() {
 		p.needChangeNextTurnProducers = true
 	}

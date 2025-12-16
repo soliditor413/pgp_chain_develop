@@ -1,27 +1,30 @@
 package validators
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"math/big"
 	"strings"
 
-	"github.com/pgprotocol/pgp-chain/core/types"
-	"github.com/pgprotocol/pgp-chain/log"
+	"github.com/elastos/Elastos.ELA/events"
+	"github.com/pgprotocol/pgp-chain/dpos"
 
 	ethereum "github.com/pgprotocol/pgp-chain"
 	"github.com/pgprotocol/pgp-chain/accounts/abi"
 	"github.com/pgprotocol/pgp-chain/common"
-	"github.com/pgprotocol/pgp-chain/consensus/pbft"
+	"github.com/pgprotocol/pgp-chain/core/types"
+	"github.com/pgprotocol/pgp-chain/log"
 	"github.com/pgprotocol/pgp-chain/spv"
 )
 
 const validatorABI = `[{"inputs":[],"name":"getValidatorSet","outputs":[{"internalType":"bytes[]","name":"validators","type":"bytes[]"},{"internalType":"uint8","name":"totalValidatorsCount","type":"uint8"}],"stateMutability":"view","type":"function"}]`
 
 type BposValidator struct {
-	validatorContract string
-	bPosStartHeight   uint64
+	validatorContract  string
+	bPosStartHeight    uint64
+	nextTurnValidators *NextTurnValidators
 }
 
 func NewBPosValidator(
@@ -37,93 +40,68 @@ func NewBPosValidator(
 	}, nil
 }
 
-func (v *BposValidator) OnBlockEvent(block *types.Block) {
+func (v *BposValidator) OnBlockEvent(block *types.Block) bool {
 	fmt.Println("BposValidator OnBlockEvent", block.NumberU64())
 	if block.NumberU64() < v.bPosStartHeight {
-		return
+		return false
 	}
-	validators, totalCount, err := v.getCurrentValidators(block.NumberU64())
+	offset := block.NumberU64() - v.bPosStartHeight
+	if offset%36 != 0 {
+		return false
+	}
+
+	validators, totalCount, err := v.GetCurrentValidators(block.NumberU64())
 	if err != nil {
 		log.Error("OnBlockEvent", "getCurrentValidators error", err)
-		return
+		return false
 	}
-	v.dumpValidators(block.NumberU64(), validators)
-	pbftEngine, ok := spv.PbftEngine.(*pbft.Pbft)
-	if !ok || pbftEngine == nil {
-		log.Error("PbftEngine type assertion failed")
-		return
+	workingHeight := block.NumberU64() + 36
+	if v.IsSameLastNextTurnValidators(validators) {
+		return false
 	}
-	if pbftEngine.IsCurrentProducers(validators) {
-		return
-	}
-	pbftEngine.UpdateCurrentProducers(validators, int(totalCount), 0)
-	go pbftEngine.AnnounceDAddr()
+	v.nextTurnValidators = NewNextTurnValidators(workingHeight, validators, int(totalCount))
+	v.dumpValidators()
+	events.Notify(dpos.ETNextValidators, *v.nextTurnValidators)
+	return true
 }
 
-// func (v *BposValidator) subscribeSpvEvent() {
-
-// 	events.Subscribe(func(e *events.Event) {
-// 		switch e.Type {
-// 		case dpos.ETOnSPVHeight:
-// 			height := e.Data.(uint64)
-// 			if spv.PbftEngine == nil {
-// 				return
-// 			}
-// 			pbftEngine, ok := spv.PbftEngine.(*pbft.Pbft)
-// 			if !ok || pbftEngine == nil {
-// 				log.Error("PbftEngine type assertion failed")
-// 				return
-// 			}
-// 			if height > v.bPosStartHeight-5 && height < v.bPosStartHeight {
-// 				curProducers := pbftEngine.GetCurrentProducers()
-// 				isSame := pbftEngine.IsSameProducers(curProducers)
-// 				if !isSame {
-// 					go pbftEngine.AnnounceDAddr()
-// 				} else {
-// 					log.Info("For the same batch of validators, no need to re-connect direct net")
-// 				}
-
-// 			} else if height >= v.bPosStartHeight && atomic.LoadUint32(&v.initialized) == 0 {
-// 				number := pbftEngine.GetBlockChain().CurrentBlock().GetHeight()
-// 				if err := v.syncValidatorsFromContract(pbftEngine, number); err != nil {
-// 					log.Error("sync validators from contract failed", "height", height, "error", err)
-// 					return
-// 				}
-// 				atomic.StoreUint32(&v.initialized, 1)
-// 				log.Info("BPos validators initialized from contract", "height", height)
-// 			}
-// 		}
-// 	})
-// }
-
-func (v *BposValidator) syncValidatorsFromContract(pbftEngine *pbft.Pbft, height uint64) error {
-	validators, totalCount, err := v.getCurrentValidators(height)
-	if err != nil {
-		return err
+func (v *BposValidator) IsSameLastNextTurnValidators(validators [][]byte) bool {
+	if v.nextTurnValidators == nil {
+		return false
 	}
-	if len(validators) == 0 {
-		return errors.New("validator set is empty")
+	if len(validators) != len(v.nextTurnValidators.Validators) {
+		return false
 	}
-	v.dumpValidators(height, validators)
-	if pbftEngine.IsCurrentProducers(validators) {
-		return nil
+	for index, p := range validators {
+		if !bytes.Equal(p, v.nextTurnValidators.Validators[index][:]) {
+			return false
+		}
 	}
-	pbftEngine.UpdateCurrentProducers(validators, int(totalCount), 0)
-	go pbftEngine.AnnounceDAddr()
-	return nil
+	return true
 }
 
-func (v *BposValidator) dumpValidators(height uint64, validators [][]byte) {
+func (v *BposValidator) IsWorkingHeight(height uint64) bool {
+	if v.nextTurnValidators == nil {
+		return false
+	}
+	return height >= v.nextTurnValidators.WorkingHeight
+}
+
+func (v *BposValidator) IsBPosFork(height uint64) bool {
+	return height >= v.bPosStartHeight
+}
+
+func (v *BposValidator) dumpValidators() {
+	log.Info("-------------------dump next turn validators---------------")
+	fmt.Println("workingHeight ", v.nextTurnValidators.WorkingHeight, " totalCount ", v.nextTurnValidators.TotalCount)
 	fmt.Println("----------------------------------------")
-	fmt.Println("height", height)
-	fmt.Println("----------------------------------------")
-	for _, v := range validators {
+	for _, v := range v.nextTurnValidators.Validators {
 		fmt.Println(common.Bytes2Hex(v))
 	}
 	fmt.Println("----------------------------------------")
 }
 
-func (v *BposValidator) getCurrentValidators(height uint64) ([][]byte, uint8, error) {
+func (v *BposValidator) GetCurrentValidators(height uint64) ([][]byte, uint8, error) {
 	if v.validatorContract == "" {
 		return nil, 0, errors.New("validator contract address is empty")
 	}

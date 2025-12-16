@@ -28,8 +28,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/pgprotocol/pgp-chain/validators"
-
 	"github.com/pgprotocol/pgp-chain/accounts"
 	"github.com/pgprotocol/pgp-chain/accounts/abi/bind"
 	"github.com/pgprotocol/pgp-chain/blocksigner"
@@ -115,8 +113,6 @@ type Ethereum struct {
 	netRPCService *ethapi.PublicNetAPI
 
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
-
-	bPosValidator *validators.BposValidator
 }
 
 func (s *Ethereum) SetEngine(engine consensus.Engine) {
@@ -234,10 +230,6 @@ func New(ctx *node.ServiceContext, config *Config, node *node.Node) (*Ethereum, 
 	chainConfig.PledgeBillContract = config.PledgedBillContract
 	chainConfig.DeveloperContract = config.DeveloperFeeContract
 	log.Info("Initialised chain configuration", "config", chainConfig, "config.Miner.Etherbase", config.Miner.Etherbase)
-	bPosValidator, err := validators.NewBPosValidator(chainConfig.Pbft.ValidatorContract, chainConfig.Pbft.BPosStartHeight)
-	if err != nil {
-		return nil, err
-	}
 	eth := &Ethereum{
 		config:         config,
 		chainDb:        chainDb,
@@ -251,7 +243,6 @@ func New(ctx *node.ServiceContext, config *Config, node *node.Node) (*Ethereum, 
 		etherbase:      config.Miner.Etherbase,
 		bloomRequests:  make(chan chan *bloombits.Retrieval),
 		bloomIndexer:   NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
-		bPosValidator:  bPosValidator,
 	}
 
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
@@ -445,7 +436,7 @@ func InitCurrentProducers(engine *pbft.Pbft, config *params.ChainConfig, current
 	spvHeight := currentBlock.Nonce()
 	selfDutyIndex := engine.GetSelfDutyIndex()
 	if spvHeight <= 0 && mode == _interface.DPOS && len(engine.GetCurrentProducers()) > 0 {
-		res := engine.OnInsertBlock(currentBlock)
+		res := engine.OnInsertBlock(currentBlock, true)
 		blocksigner.SelfIsProducer = engine.IsProducer()
 		log.Info("blocksigner.SelfIsProducer", "", blocksigner.SelfIsProducer)
 		if res {
@@ -560,7 +551,7 @@ func SubscriptEvent(eth *Ethereum, engine consensus.Engine) {
 					pbftEngine := engine.(*pbft.Pbft)
 					pbftEngine.AccessFutureBlock(b.Block)
 					selfDutyIndex := pbftEngine.GetSelfDutyIndex()
-					res := pbftEngine.OnInsertBlock(b.Block)
+					res := pbftEngine.OnInsertBlock(b.Block, false)
 					blocksigner.SelfIsProducer = pbftEngine.IsProducer()
 					isSynchronising := eth.Downloader().Synchronising()
 					if res {
@@ -572,6 +563,7 @@ func SubscriptEvent(eth *Ethereum, engine consensus.Engine) {
 					if !isSynchronising {
 						go eth.blockchain.ResetChainEventTimer()
 					}
+					pbftEngine.OnBlockEvent(b.Block)
 				}
 			case <-initProducersSub.Chan():
 				pbftEngine := engine.(*pbft.Pbft)
