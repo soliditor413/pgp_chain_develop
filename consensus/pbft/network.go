@@ -293,7 +293,7 @@ func (p *Pbft) OnInsertBlock(block *types.Block, isInit bool) bool {
 		// Update block height and check for inactive producers
 		// Get current producers list
 		currentProducers := p.GetCurrentProducers()
-		p.producerStats.UpdateBlockHeight(block.NumberU64(), currentProducers)
+		p.producerStats.UpdateBlockHeight(block.NumberU64(), block.Time(), currentProducers)
 	}
 
 	log.Info("[OnInsertBlock]",
@@ -711,7 +711,7 @@ func (p *Pbft) OnRecoverTimeout() {
 
 func (p *Pbft) DoRecover() {
 	var maxCountMaxViewOffset uint32
-	for k, _ := range p.statusMap {
+	for k := range p.statusMap {
 		if maxCountMaxViewOffset < k {
 			maxCountMaxViewOffset = k
 		}
