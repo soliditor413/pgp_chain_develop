@@ -19,7 +19,7 @@ import (
 	"github.com/pgprotocol/pgp-chain/spv"
 )
 
-const validatorABI = `[{"inputs":[],"name":"getValidatorSet","outputs":[{"internalType":"bytes[]","name":"validators","type":"bytes[]"},{"internalType":"uint8","name":"totalValidatorsCount","type":"uint8"}],"stateMutability":"view","type":"function"}]`
+const validatorABI = `[{"inputs":[],"name":"getNextValidatorSet","outputs":[{"internalType":"bytes[]","name":"validators","type":"bytes[]"},{"internalType":"uint8","name":"totalValidatorsCount","type":"uint8"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"getEpoch0Validators","outputs":[{"internalType":"bytes[]","name":"validators","type":"bytes[]"},{"internalType":"uint8","name":"totalValidatorsCount","type":"uint8"}],"stateMutability":"view","type":"function"}]`
 
 type BposValidator struct {
 	validatorContract  string
@@ -50,7 +50,7 @@ func (v *BposValidator) OnBlockEvent(block *types.Block) bool {
 		return false
 	}
 
-	validators, totalCount, err := v.GetCurrentValidators(block.NumberU64())
+	validators, totalCount, err := v.GetNextValidatorSet(block.NumberU64())
 	if err != nil {
 		log.Error("OnBlockEvent", "getCurrentValidators error", err)
 		return false
@@ -101,7 +101,21 @@ func (v *BposValidator) dumpValidators() {
 	fmt.Println("----------------------------------------")
 }
 
-func (v *BposValidator) GetCurrentValidators(height uint64) ([][]byte, uint8, error) {
+func (v *BposValidator) GetCurrentValidatorSet(height uint64) ([][]byte, uint8, error) {
+	if v.validatorContract == "" {
+		return nil, 0, errors.New("validator contract address is empty")
+	}
+	if !common.IsHexAddress(v.validatorContract) {
+		return nil, 0, errors.New("validator contract address is invalid")
+	}
+	epoch := (height - v.bPosStartHeight) / 36
+	if epoch == 0 {
+		return v.GetEpoch0Validators(height)
+	}
+	return v.GetNextValidatorSet(height - 36)
+}
+
+func (v *BposValidator) GetEpoch0Validators(height uint64) ([][]byte, uint8, error) {
 	if v.validatorContract == "" {
 		return nil, 0, errors.New("validator contract address is empty")
 	}
@@ -117,7 +131,7 @@ func (v *BposValidator) GetCurrentValidators(height uint64) ([][]byte, uint8, er
 		return nil, 0, err
 	}
 	contractAddr := common.HexToAddress(v.validatorContract)
-	data, err := contractABI.Pack("getValidatorSet")
+	data, err := contractABI.Pack("getEpoch0Validators")
 	if err != nil {
 		return nil, 0, err
 	}
@@ -131,13 +145,55 @@ func (v *BposValidator) GetCurrentValidators(height uint64) ([][]byte, uint8, er
 		return nil, 0, err
 	}
 	if len(output) == 0 {
-		return nil, 0, errors.New("empty response from getValidatorSet")
+		return nil, 0, errors.New("empty response from getEpoch0Validators")
 	}
 	var resp struct {
 		Validators           [][]byte
 		TotalValidatorsCount uint8
 	}
-	if err := contractABI.UnpackIntoInterface(&resp, "getValidatorSet", output); err != nil {
+	if err := contractABI.UnpackIntoInterface(&resp, "getEpoch0Validators", output); err != nil {
+		return nil, 0, err
+	}
+	return resp.Validators, resp.TotalValidatorsCount, nil
+}
+
+func (v *BposValidator) GetNextValidatorSet(height uint64) ([][]byte, uint8, error) {
+	if v.validatorContract == "" {
+		return nil, 0, errors.New("validator contract address is empty")
+	}
+	if !common.IsHexAddress(v.validatorContract) {
+		return nil, 0, errors.New("validator contract address is invalid")
+	}
+	client := spv.GetClient()
+	if client == nil {
+		return nil, 0, errors.New("spv eth client is nil")
+	}
+	contractABI, err := abi.JSON(strings.NewReader(validatorABI))
+	if err != nil {
+		return nil, 0, err
+	}
+	contractAddr := common.HexToAddress(v.validatorContract)
+	data, err := contractABI.Pack("getNextValidatorSet")
+	if err != nil {
+		return nil, 0, err
+	}
+	msg := ethereum.CallMsg{
+		To:   &contractAddr,
+		Data: data,
+	}
+	blockNum := new(big.Int).SetUint64(height)
+	output, err := client.CallContract(context.Background(), msg, blockNum)
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(output) == 0 {
+		return nil, 0, errors.New("empty response from getNextValidatorSet")
+	}
+	var resp struct {
+		Validators           [][]byte
+		TotalValidatorsCount uint8
+	}
+	if err := contractABI.UnpackIntoInterface(&resp, "getNextValidatorSet", output); err != nil {
 		return nil, 0, err
 	}
 	return resp.Validators, resp.TotalValidatorsCount, nil

@@ -338,7 +338,7 @@ func (p *Pbft) OnInsertBlock(block *types.Block, isInit bool) bool {
 			return true
 		}
 	} else if p.bPosValidator.IsBPosFork(block.NumberU64()) {
-		producers, totalCount, err := p.bPosValidator.GetCurrentValidators(block.NumberU64())
+		producers, totalCount, err := p.bPosValidator.GetCurrentValidatorSet(block.NumberU64())
 		if err != nil {
 			log.Error("get dpos validator failed", "error", err)
 			return false
