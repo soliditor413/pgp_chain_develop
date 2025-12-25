@@ -31,9 +31,6 @@ func NewBPosValidator(
 	validatorContract string,
 	bPosStartHeight uint64,
 ) (*BposValidator, error) {
-	if len(validatorContract) == 0 {
-		return nil, errors.New("empty validator contract")
-	}
 	return &BposValidator{
 		validatorContract: validatorContract,
 		bPosStartHeight:   bPosStartHeight,
@@ -42,6 +39,9 @@ func NewBPosValidator(
 
 func (v *BposValidator) OnBlockEvent(block *types.Block) bool {
 	fmt.Println("BposValidator OnBlockEvent", block.NumberU64())
+	if v.validatorContract == "" {
+		return false
+	}
 	if block.NumberU64() < v.bPosStartHeight {
 		return false
 	}

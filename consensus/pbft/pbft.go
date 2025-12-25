@@ -552,7 +552,7 @@ func (p *Pbft) Finalize(chain consensus.ChainReader, header *types.Header, state
 
 func (p *Pbft) judgeNeedChangeNextTurnProducers() {
 	dutyIndex := p.dispatcher.GetConsensusView().GetDutyIndex()
-	if dutyIndex == 0 && p.bPosValidator.IsWorkingHeight(p.GetBlockChain().CurrentBlock().NumberU64()) {
+	if p.bPosValidator != nil && dutyIndex == 0 && p.bPosValidator.IsWorkingHeight(p.GetBlockChain().CurrentBlock().NumberU64()) {
 		p.needChangeNextTurnProducers = true
 		return
 	}
