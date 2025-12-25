@@ -2518,7 +2518,7 @@ func (bc *BlockChain) ResetChainEventTimer() {
 }
 
 func (bc *BlockChain) DelayToCheckNetwork() {
-	time.Sleep(1 * time.Minute)
+	time.Sleep(5 * time.Minute)
 	fmt.Println("delay to checkNetwork")
 	header := bc.CurrentHeader()
 	if header == nil {
