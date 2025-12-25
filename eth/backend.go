@@ -557,11 +557,16 @@ func SubscriptEvent(eth *Ethereum, engine consensus.Engine) {
 					selfDutyIndex := pbftEngine.GetSelfDutyIndex()
 					res := pbftEngine.OnInsertBlock(b.Block)
 					blocksigner.SelfIsProducer = pbftEngine.IsProducer()
+					isSynchronising := eth.Downloader().Synchronising()
 					if res {
 						eevents.Notify(dpos.ETUpdateProducers, selfDutyIndex)
-						go eth.blockchain.DelayToCheckNetwork()
+						if !isSynchronising {
+							go eth.blockchain.DelayToCheckNetwork()
+						}
 					}
-					go eth.blockchain.ResetChainEventTimer()
+					if !isSynchronising {
+						go eth.blockchain.ResetChainEventTimer()
+					}
 				}
 			case <-initProducersSub.Chan():
 				pbftEngine := engine.(*pbft.Pbft)

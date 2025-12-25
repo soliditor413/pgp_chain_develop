@@ -20,7 +20,6 @@ package core
 import (
 	"errors"
 	"fmt"
-	"github.com/pgprotocol/pgp-chain/common/math"
 	"io"
 	"math/big"
 	mrand "math/rand"
@@ -31,6 +30,7 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/pgprotocol/pgp-chain/blocksigner"
 	"github.com/pgprotocol/pgp-chain/common"
+	"github.com/pgprotocol/pgp-chain/common/math"
 	"github.com/pgprotocol/pgp-chain/common/mclock"
 	"github.com/pgprotocol/pgp-chain/common/prque"
 	"github.com/pgprotocol/pgp-chain/consensus"
@@ -42,6 +42,7 @@ import (
 	"github.com/pgprotocol/pgp-chain/event"
 	"github.com/pgprotocol/pgp-chain/log"
 	"github.com/pgprotocol/pgp-chain/metrics"
+	"github.com/pgprotocol/pgp-chain/p2p"
 	"github.com/pgprotocol/pgp-chain/params"
 	"github.com/pgprotocol/pgp-chain/rlp"
 	"github.com/pgprotocol/pgp-chain/trie"
@@ -2517,7 +2518,8 @@ func (bc *BlockChain) ResetChainEventTimer() {
 }
 
 func (bc *BlockChain) DelayToCheckNetwork() {
-	time.Sleep(5 * time.Minute)
+	time.Sleep(1 * time.Minute)
+	fmt.Println("delay to checkNetwork")
 	header := bc.CurrentHeader()
 	if header == nil {
 		log.Error("DelayToCheckNetwork header is nil")
@@ -2547,7 +2549,12 @@ func (bc *BlockChain) checkNetworkConnectionsOnTimeout() {
 	if pbft, ok := pbftEngine.(interface {
 		GetActivePeersCount() int
 		HasPeersMajorityCount() (int, bool)
+		GetAllArbiterPeersInfo() []*p2p.PeerInfo
 	}); ok {
+		if len(pbft.GetAllArbiterPeersInfo()) == 0 {
+			log.Info("Network connection check on timeout", "self is common node")
+			return
+		}
 		connectedCount, hasMajority := pbft.HasPeersMajorityCount()
 		log.Info("Network connection check on timeout",
 			"connectedCount", connectedCount,
