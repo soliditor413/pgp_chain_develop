@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"sync"
 	"time"
@@ -57,7 +58,7 @@ type ProducerStats struct {
 	mu                       sync.RWMutex
 	db                       dbInterface                // Database for persistence
 	dataDir                  string                     // Data directory path
-	lastParticipationTime    map[string]time.Time       // key: producer public key (hex), value: last participation time
+	lastParticipationTime    map[string]uint64          // key: producer public key (hex), value: last participation time (unix seconds)
 	participationCount       map[string]uint64          // key: producer public key (hex), value: participation count
 	lastBlockHeight          map[string]uint64          // key: producer public key (hex), value: last block height
 	consecutiveMissedBlocks  map[string]uint64          // key: producer public key (hex), value: consecutive missed blocks
@@ -74,7 +75,7 @@ type ProducerStats struct {
 func NewProducerStats(dataDir string) (*ProducerStats, error) {
 	ps := &ProducerStats{
 		dataDir:                  dataDir,
-		lastParticipationTime:    make(map[string]time.Time),
+		lastParticipationTime:    make(map[string]uint64),
 		participationCount:       make(map[string]uint64),
 		lastBlockHeight:          make(map[string]uint64),
 		consecutiveMissedBlocks:  make(map[string]uint64),
@@ -125,9 +126,12 @@ func (ps *ProducerStats) RecordParticipation(producerPubKey []byte, blockHeight 
 	defer ps.mu.Unlock()
 
 	producerKey := common.Bytes2Hex(producerPubKey)
-	participationTime := time.Unix(int64(blockTime), 0)
+	participationTime := blockTime
+	if participationTime == 0 {
+		participationTime = uint64(time.Now().Unix())
+	}
 
-	ps.lastParticipationTime[producerKey] = participationTime
+	ps.lastParticipationTime[producerKey] = blockTime
 	ps.participationCount[producerKey]++
 	ps.lastBlockHeight[producerKey] = blockHeight
 
@@ -142,10 +146,10 @@ func (ps *ProducerStats) RecordParticipation(producerPubKey []byte, blockHeight 
 			"height", blockHeight)
 	}
 
-	log.Debug("Record producer participation",
+	log.Info("Record producer participation",
 		"producer", producerKey,
 		"height", blockHeight,
-		"time", participationTime,
+		"time", time.Unix(int64(participationTime), 0),
 		"count", ps.participationCount[producerKey])
 
 	// Save to database
@@ -163,20 +167,24 @@ func (ps *ProducerStats) GetInactiveDuration(producerPubKey []byte) (duration ti
 	defer ps.mu.RUnlock()
 
 	producerKey := common.Bytes2Hex(producerPubKey)
-	lastTime, exists := ps.lastParticipationTime[producerKey]
+	lastTimeSec, exists := ps.lastParticipationTime[producerKey]
 
 	if !exists {
 		return 0, true
 	}
 
-	duration = time.Since(lastTime)
+	nowSec := ps.getNow().Unix()
+	if nowSec < 0 || lastTimeSec > uint64(nowSec) {
+		return 0, false
+	}
+	duration = time.Duration(nowSec-int64(lastTimeSec)) * time.Second
 	return duration, false
 }
 
 // GetParticipationInfo returns detailed participation information for a producer
 type ParticipationInfo struct {
 	ProducerPublicKey     string        `json:"producerPublicKey"`
-	LastParticipationTime time.Time     `json:"lastParticipationTime"`
+	LastParticipationTime uint64        `json:"lastParticipationTime"` // unix seconds
 	InactiveDuration      time.Duration `json:"inactiveDuration"`
 	ParticipationCount    uint64        `json:"participationCount"`
 	LastBlockHeight       uint64        `json:"lastBlockHeight"`
@@ -192,7 +200,7 @@ func (ps *ProducerStats) GetParticipationInfo(producerPubKey []byte) *Participat
 	defer ps.mu.RUnlock()
 
 	producerKey := common.Bytes2Hex(producerPubKey)
-	lastTime, exists := ps.lastParticipationTime[producerKey]
+	lastTimeSec, exists := ps.lastParticipationTime[producerKey]
 
 	info := &ParticipationInfo{
 		ProducerPublicKey: producerKey,
@@ -200,8 +208,11 @@ func (ps *ProducerStats) GetParticipationInfo(producerPubKey []byte) *Participat
 	}
 
 	if exists {
-		info.LastParticipationTime = lastTime
-		info.InactiveDuration = time.Since(lastTime)
+		info.LastParticipationTime = lastTimeSec
+		nowSec := ps.getNow().Unix()
+		if nowSec >= 0 && lastTimeSec <= uint64(nowSec) {
+			info.InactiveDuration = time.Duration(int64(nowSec)-int64(lastTimeSec)) * time.Second
+		}
 		info.ParticipationCount = ps.participationCount[producerKey]
 		info.LastBlockHeight = ps.lastBlockHeight[producerKey]
 	}
@@ -215,14 +226,14 @@ func (ps *ProducerStats) GetAllProducersStats() map[string]*ParticipationInfo {
 	defer ps.mu.RUnlock()
 
 	result := make(map[string]*ParticipationInfo)
-	now := time.Now()
+	nowSec := ps.getNow().Unix()
 
 	for producerKey := range ps.lastParticipationTime {
-		lastTime := ps.lastParticipationTime[producerKey]
+		lastSec := ps.lastParticipationTime[producerKey]
 		result[producerKey] = &ParticipationInfo{
 			ProducerPublicKey:     producerKey,
-			LastParticipationTime: lastTime,
-			InactiveDuration:      now.Sub(lastTime),
+			LastParticipationTime: lastSec,
+			InactiveDuration:      durationSinceSec(nowSec, lastSec),
 			ParticipationCount:    ps.participationCount[producerKey],
 			LastBlockHeight:       ps.lastBlockHeight[producerKey],
 			NeverParticipated:     false,
@@ -330,7 +341,7 @@ func (ps *ProducerStats) cleanupOldProducers(currentProducers [][]byte, currentH
 	}
 
 	// Calculate cleanup threshold time
-	cleanupThresholdTime := time.Now().AddDate(0, 0, -CleanupThresholdDays)
+	cleanupThresholdTime := time.Now().AddDate(0, 0, -CleanupThresholdDays).Unix()
 	cleanupThresholdHeight := currentHeight - (CleanupThresholdDays * 24 * 60 * 60 / 3) // Assuming 3 seconds per block
 
 	// Find producers to cleanup
@@ -342,14 +353,14 @@ func (ps *ProducerStats) cleanupOldProducers(currentProducers [][]byte, currentH
 		}
 
 		// Check if producer hasn't participated for a long time
-		lastTime := ps.lastParticipationTime[producerKey]
+		lastTimeSec := ps.lastParticipationTime[producerKey]
 		lastHeight := ps.lastBlockHeight[producerKey]
 
 		// Cleanup if:
 		// 1. Not in current producer list AND
 		// 2. Last participation was more than CleanupThresholdDays ago OR
 		// 3. Last participation height is more than cleanupThresholdHeight blocks ago
-		if lastTime.Before(cleanupThresholdTime) || lastHeight < cleanupThresholdHeight {
+		if (lastTimeSec > 0 && int64(lastTimeSec) < cleanupThresholdTime) || lastHeight < cleanupThresholdHeight {
 			producersToCleanup = append(producersToCleanup, producerKey)
 		}
 	}
@@ -459,7 +470,7 @@ func (ps *ProducerStats) addToBlacklist(producerKey string, blockHeight uint64, 
 		AddedAt:                 time.Unix(int64(blockTime), 0),
 		AddedAtBlockHeight:      blockHeight,
 		ConsecutiveMissedBlocks: ps.consecutiveMissedBlocks[producerKey],
-		LastParticipationTime:   ps.lastParticipationTime[producerKey],
+		LastParticipationTime:   time.Unix(int64(ps.lastParticipationTime[producerKey]), 0),
 		LastBlockHeight:         ps.lastBlockHeight[producerKey],
 	}
 
@@ -701,6 +712,13 @@ func (ps *ProducerStats) getNow() time.Time {
 	return now
 }
 
+func durationSinceSec(nowSec int64, pastSec uint64) time.Duration {
+	if nowSec < 0 || pastSec > uint64(nowSec) {
+		return 0
+	}
+	return time.Duration(int64(nowSec)-int64(pastSec)) * time.Second
+}
+
 // ProducerStatsData represents the serialized data for a producer
 type ProducerStatsData struct {
 	LastParticipationTime   int64  `json:"lastParticipationTime"`
@@ -715,9 +733,9 @@ func (ps *ProducerStats) saveProducerToDB(producerKey string) {
 	if ps.db == nil {
 		return
 	}
-
+	fmt.Println("save ProducerToDB>>> ", producerKey)
 	data := ProducerStatsData{
-		LastParticipationTime:   ps.lastParticipationTime[producerKey].Unix(),
+		LastParticipationTime:   int64(ps.lastParticipationTime[producerKey]),
 		ParticipationCount:      ps.participationCount[producerKey],
 		LastBlockHeight:         ps.lastBlockHeight[producerKey],
 		ConsecutiveMissedBlocks: ps.consecutiveMissedBlocks[producerKey],
@@ -792,7 +810,7 @@ func (ps *ProducerStats) loadFromDB() error {
 		}
 
 		// Restore producer statistics
-		ps.lastParticipationTime[producerKey] = time.Unix(data.LastParticipationTime, 0)
+		ps.lastParticipationTime[producerKey] = uint64(data.LastParticipationTime)
 		ps.participationCount[producerKey] = data.ParticipationCount
 		ps.lastBlockHeight[producerKey] = data.LastBlockHeight
 		ps.consecutiveMissedBlocks[producerKey] = data.ConsecutiveMissedBlocks
