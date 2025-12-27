@@ -333,6 +333,9 @@ func (ps *ProducerStats) UpdateBlockHeight(blockHeight uint64, blockTime uint64,
 // cleanupOldProducers removes producer data that are no longer in the current producer list
 // and haven't participated for a long time (CleanupThresholdDays)
 func (ps *ProducerStats) cleanupOldProducers(currentProducers [][]byte, currentHeight uint64) {
+	// Use the already-held lock's view of time to avoid locking twice on getNow
+	currentTime := ps.getNowWithLock()
+
 	// Create a set of current producers for quick lookup
 	producerSet := make(map[string]bool)
 	for _, producer := range currentProducers {
@@ -400,7 +403,7 @@ func (ps *ProducerStats) cleanupOldProducers(currentProducers [][]byte, currentH
 		if entry == nil {
 			continue
 		}
-		if ps.blacklistExpired(entry) {
+		if ps.blacklistExpiredAt(entry, currentTime) {
 			delete(ps.blacklist, producerKey)
 			ps.deleteBlacklistFromDB(producerKey)
 			blacklistCleanedCount++
@@ -678,10 +681,13 @@ func (ps *ProducerStats) GetBlacklistProducerKeys() []string {
 }
 
 func (ps *ProducerStats) blacklistExpired(entry *BlacklistEntry) bool {
+	return ps.blacklistExpiredAt(entry, ps.getNow())
+}
+
+func (ps *ProducerStats) blacklistExpiredAt(entry *BlacklistEntry, now time.Time) bool {
 	if entry == nil {
 		return false
 	}
-	now := ps.getNow()
 	return now.Sub(entry.AddedAt) >= BlacklistExpiry
 }
 
@@ -706,6 +712,17 @@ func (ps *ProducerStats) getNow() time.Time {
 	ps.mu.RLock()
 	now := ps.currentBlockTime
 	ps.mu.RUnlock()
+	if now.IsZero() {
+		return time.Now()
+	}
+	return now
+}
+
+// getNowWithLock returns the current block time when the caller already holds
+// the mutex (Lock or RLock). This avoids attempting to acquire the lock twice,
+// which can deadlock when invoked from code paths that already hold ps.mu.
+func (ps *ProducerStats) getNowWithLock() time.Time {
+	now := ps.currentBlockTime
 	if now.IsZero() {
 		return time.Now()
 	}
