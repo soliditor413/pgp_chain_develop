@@ -736,6 +736,7 @@ func (c *p256Verify) RequiredGas(input []byte) uint64 {
 
 func (c *p256Verify) Run(input []byte) ([]byte, error) {
 	// Make sure the input is valid (correct length)
+	fmt.Println(">>>>>>>> p256Verify <<<<<< ", "input ", common.Bytes2Hex(input))
 	if len(input) != p256VerifyInputLength {
 		return nil, errP256VerifyInvalidInputLength
 	}
@@ -745,6 +746,10 @@ func (c *p256Verify) Run(input []byte) ([]byte, error) {
 	messageLen := big.NewInt(0).SetBytes(messageSize)
 	data := getData(input, 65, messageLen.Uint64())
 	sig := getData(input, 65+messageLen.Uint64(), 64)
+	fmt.Println("p256Verify  ", "pubKey", common.Bytes2Hex(pubkey))
+	fmt.Println("p256Verify  ", "messageLen", messageLen)
+	fmt.Println("p256Verify  ", "data", common.Bytes2Hex(data))
+	fmt.Println("p256Verify  ", "sig", common.Bytes2Hex(sig))
 	publicKey, err := elaCrypto.DecodePoint(pubkey)
 	if err != nil {
 		return nil, errP256VerifyInvalidPublicKey
