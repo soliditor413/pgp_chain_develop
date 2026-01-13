@@ -348,6 +348,7 @@ func (p *Pbft) OnInsertBlock(block *types.Block, isInit bool) bool {
 		if isCurrent {
 			return false
 		}
+		fmt.Println(">>>>>>>>>>> OnInsertBlock update current producers GetCurrentValidatorSet <<<<<<<<<<<<", "totalCount ", totalCount)
 		p.UpdateCurrentProducers(producers, int(totalCount), 0)
 		go p.AnnounceDAddr()
 		go p.Recover()
