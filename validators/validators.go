@@ -38,7 +38,7 @@ func NewBPosValidator(
 }
 
 func (v *BposValidator) OnBlockEvent(block *types.Block) bool {
-	fmt.Println("BposValidator OnBlockEvent", block.NumberU64())
+	fmt.Println("BposValidator OnBlockEvent", block.NumberU64(), " bPosStartHeight ", v.bPosStartHeight)
 	if v.validatorContract == "" {
 		return false
 	}
@@ -49,8 +49,7 @@ func (v *BposValidator) OnBlockEvent(block *types.Block) bool {
 	if offset%36 != 0 {
 		return false
 	}
-
-	validators, totalCount, err := v.GetNextValidatorSet(block.NumberU64())
+	validators, totalCount, err := v.GetCurrentValidatorSet(block.NumberU64())
 	if err != nil {
 		log.Error("OnBlockEvent", "getCurrentValidators error", err)
 		return false
@@ -109,6 +108,7 @@ func (v *BposValidator) GetCurrentValidatorSet(height uint64) ([][]byte, uint8, 
 		return nil, 0, errors.New("validator contract address is invalid")
 	}
 	epoch := (height - v.bPosStartHeight) / 36
+	fmt.Println(">>>>>>>>>>> GetCurrentValidatorSet <<<<<<<<<<< epoch ", epoch)
 	if epoch == 0 {
 		return v.GetEpoch0Validators(height)
 	}
