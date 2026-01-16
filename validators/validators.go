@@ -43,22 +43,33 @@ func (v *BposValidator) OnBlockEvent(block *types.Block) bool {
 	if v.validatorContract == "" {
 		return false
 	}
-	if block.NumberU64() < v.bPosStartHeight {
+	if block.NumberU64() < v.bPosStartHeight-BLOCKS_PER_EPOCH {
 		return false
 	}
-	offset := block.NumberU64() - v.bPosStartHeight
-	if offset%BLOCKS_PER_EPOCH != 0 {
-		return false
+	if block.NumberU64() > v.bPosStartHeight {
+		offset := block.NumberU64() - v.bPosStartHeight
+		if offset%BLOCKS_PER_EPOCH != 0 {
+			return false
+		}
 	}
-	validators, totalCount, err := v.GetCurrentValidatorSet(block.NumberU64())
+	validators := make([][]byte, 0)
+	totalCount := uint8(0)
+	var err error
+	if block.NumberU64() < v.bPosStartHeight && block.NumberU64() > v.bPosStartHeight-BLOCKS_PER_EPOCH {
+		validators, totalCount, err = v.GetEpoch0Validators(block.NumberU64())
+	} else {
+		validators, totalCount, err = v.GetNextValidatorSet(block.NumberU64())
+	}
+
 	if err != nil {
 		log.Error("OnBlockEvent", "getCurrentValidators error", err)
 		return false
 	}
-	workingHeight := block.NumberU64() + BLOCKS_PER_EPOCH
 	if v.IsSameLastNextTurnValidators(validators) {
+		fmt.Println("is same nextTurn validators")
 		return false
 	}
+	workingHeight := block.NumberU64() + BLOCKS_PER_EPOCH
 	v.nextTurnValidators = NewNextTurnValidators(workingHeight, validators, int(totalCount))
 	v.dumpValidators()
 	events.Notify(dpos.ETNextValidators, *v.nextTurnValidators)
@@ -107,6 +118,9 @@ func (v *BposValidator) GetCurrentValidatorSet(height uint64) ([][]byte, uint8, 
 	}
 	if !common.IsHexAddress(v.validatorContract) {
 		return nil, 0, errors.New("validator contract address is invalid")
+	}
+	if height < v.bPosStartHeight {
+		return nil, 0, errors.New("height is less than bPosStartHeight")
 	}
 	epoch := (height - v.bPosStartHeight) / BLOCKS_PER_EPOCH
 	fmt.Println(">>>>>>>>>>> GetCurrentValidatorSet <<<<<<<<<<< epoch ", epoch)
