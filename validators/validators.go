@@ -20,7 +20,7 @@ import (
 )
 
 const validatorABI = `[{"inputs":[],"name":"getNextValidatorSet","outputs":[{"internalType":"bytes[]","name":"validators","type":"bytes[]"},{"internalType":"uint8","name":"totalValidatorsCount","type":"uint8"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"getEpoch0Validators","outputs":[{"internalType":"bytes[]","name":"validators","type":"bytes[]"},{"internalType":"uint8","name":"totalValidatorsCount","type":"uint8"}],"stateMutability":"view","type":"function"}]`
-const BLOCKS_PER_EPOCH = 36
+const BLOCKS_PER_EPOCH = 18 //TODO test for jianbin,should change to 36
 
 type BposValidator struct {
 	validatorContract  string
