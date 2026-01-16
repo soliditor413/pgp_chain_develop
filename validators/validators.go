@@ -20,6 +20,7 @@ import (
 )
 
 const validatorABI = `[{"inputs":[],"name":"getNextValidatorSet","outputs":[{"internalType":"bytes[]","name":"validators","type":"bytes[]"},{"internalType":"uint8","name":"totalValidatorsCount","type":"uint8"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"getEpoch0Validators","outputs":[{"internalType":"bytes[]","name":"validators","type":"bytes[]"},{"internalType":"uint8","name":"totalValidatorsCount","type":"uint8"}],"stateMutability":"view","type":"function"}]`
+const BLOCKS_PER_EPOCH = 36
 
 type BposValidator struct {
 	validatorContract  string
@@ -46,7 +47,7 @@ func (v *BposValidator) OnBlockEvent(block *types.Block) bool {
 		return false
 	}
 	offset := block.NumberU64() - v.bPosStartHeight
-	if offset%36 != 0 {
+	if offset%BLOCKS_PER_EPOCH != 0 {
 		return false
 	}
 	validators, totalCount, err := v.GetCurrentValidatorSet(block.NumberU64())
@@ -54,7 +55,7 @@ func (v *BposValidator) OnBlockEvent(block *types.Block) bool {
 		log.Error("OnBlockEvent", "getCurrentValidators error", err)
 		return false
 	}
-	workingHeight := block.NumberU64() + 36
+	workingHeight := block.NumberU64() + BLOCKS_PER_EPOCH
 	if v.IsSameLastNextTurnValidators(validators) {
 		return false
 	}
@@ -107,12 +108,12 @@ func (v *BposValidator) GetCurrentValidatorSet(height uint64) ([][]byte, uint8, 
 	if !common.IsHexAddress(v.validatorContract) {
 		return nil, 0, errors.New("validator contract address is invalid")
 	}
-	epoch := (height - v.bPosStartHeight) / 36
+	epoch := (height - v.bPosStartHeight) / BLOCKS_PER_EPOCH
 	fmt.Println(">>>>>>>>>>> GetCurrentValidatorSet <<<<<<<<<<< epoch ", epoch)
 	if epoch == 0 {
 		return v.GetEpoch0Validators(height)
 	}
-	return v.GetNextValidatorSet(height - 36)
+	return v.GetNextValidatorSet(height - BLOCKS_PER_EPOCH)
 }
 
 func (v *BposValidator) GetEpoch0Validators(height uint64) ([][]byte, uint8, error) {
