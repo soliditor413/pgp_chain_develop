@@ -13,6 +13,7 @@ import (
 	"math/big"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -102,6 +103,7 @@ type Pbft struct {
 	dispatcher    *dpos.Dispatcher
 	confirmCh     chan *payload.Confirm
 	unConfirmCh   chan *payload.Confirm
+	sealChMu      sync.Mutex
 	account       daccount.Account
 	bridgeAccount crypto.Keypair
 	network       *dpos.Network
@@ -547,12 +549,12 @@ func (p *Pbft) Finalize(chain consensus.ChainReader, header *types.Header, state
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.CalcUncleHash(nil)
 	p.CleanFinalConfirmedBlock(header.Number.Uint64())
-	p.judgeNeedChangeNextTurnProducers()
+	p.judgeNeedChangeNextTurnProducers(header.Number.Uint64())
 }
 
-func (p *Pbft) judgeNeedChangeNextTurnProducers() {
+func (p *Pbft) judgeNeedChangeNextTurnProducers(height uint64) {
 	dutyIndex := p.dispatcher.GetConsensusView().GetDutyIndex()
-	if p.bPosValidator != nil && dutyIndex == 0 && p.bPosValidator.IsWorkingHeight(p.GetBlockChain().CurrentBlock().NumberU64()) {
+	if p.bPosValidator != nil && dutyIndex == 0 && p.bPosValidator.IsWorkingHeight(height) {
 		p.needChangeNextTurnProducers = true
 		return
 	}
@@ -622,14 +624,16 @@ func (p *Pbft) Seal(chain consensus.ChainReader, block *types.Block, results cha
 	changeViewTime := p.dispatcher.GetConsensusView().GetChangeViewTime()
 	toleranceDelay := changeViewTime.Sub(p.dispatcher.GetNowTime())
 	log.Info("changeViewLeftTime", "toleranceDelay", toleranceDelay)
+	confirmCh := p.confirmCh
+	unConfirmCh := p.unConfirmCh
 	select {
-	case confirm := <-p.confirmCh:
+	case confirm := <-confirmCh:
 		atomic.StoreInt32(&p.isSealing, 0)
 		log.Info("Received confirmCh", "proposal", confirm.Proposal.Hash().String(), "block:", block.NumberU64())
 		p.addConfirmToBlock(header, confirm)
 		p.isSealOver = true
 		break
-	case <-p.unConfirmCh:
+	case <-unConfirmCh:
 		atomic.StoreInt32(&p.isSealing, 0)
 		log.Warn("proposal is rejected")
 		p.isSealOver = true
@@ -637,11 +641,13 @@ func (p *Pbft) Seal(chain consensus.ChainReader, block *types.Block, results cha
 	case <-time.After(toleranceDelay):
 		atomic.StoreInt32(&p.isSealing, 0)
 		log.Warn("seal time out stop mine")
+		p.resetSealChannels(confirmCh, unConfirmCh, "timeout")
 		p.isSealOver = true
 		return nil
 	case <-stop:
 		atomic.StoreInt32(&p.isSealing, 0)
 		log.Warn("pbft seal is stop")
+		p.resetSealChannels(confirmCh, unConfirmCh, "stop")
 		p.isSealOver = true
 		return nil
 	}
@@ -670,7 +676,7 @@ func (p *Pbft) addConfirmToBlock(header *types.Header, confirm *payload.Confirm)
 	sealHash := SealHash(header)
 	hash, _ := ecom.Uint256FromBytes(sealHash.Bytes())
 	p.dispatcher.FinishedProposal(header.Number.Uint64(), *hash, header.Time)
-	p.judgeNeedChangeNextTurnProducers()
+	p.judgeNeedChangeNextTurnProducers(header.Number.Uint64())
 	return nil
 }
 
@@ -692,7 +698,7 @@ func (p *Pbft) onConfirm(confirm *payload.Confirm) error {
 			return errors.New("is not confirm current proposal")
 		}
 		if atomic.LoadInt32(&p.isSealing) == 1 {
-			p.confirmCh <- confirm
+			p.trySendConfirm(confirm)
 		} else {
 			dpos.Info("on duty, now is not sealing")
 		}
@@ -710,10 +716,61 @@ func (p *Pbft) onUnConfirm(unconfirm *payload.Confirm) error {
 	}
 	if p.IsOnduty() {
 		if atomic.LoadInt32(&p.isSealing) == 1 {
-			p.unConfirmCh <- unconfirm
+			p.trySendUnconfirm(unconfirm)
 		}
 	}
 	return nil
+}
+
+func (p *Pbft) trySendConfirm(confirm *payload.Confirm) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Warn("confirmCh send failed", "reason", r)
+		}
+	}()
+	select {
+	case p.confirmCh <- confirm:
+	default:
+		log.Warn("confirmCh not ready, drop confirm")
+	}
+}
+
+func (p *Pbft) trySendUnconfirm(unconfirm *payload.Confirm) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Warn("unConfirmCh send failed", "reason", r)
+		}
+	}()
+	select {
+	case p.unConfirmCh <- unconfirm:
+	default:
+		log.Warn("unConfirmCh not ready, drop unconfirm")
+	}
+}
+
+func (p *Pbft) resetSealChannels(confirmCh, unConfirmCh chan *payload.Confirm, reason string) {
+	var closeConfirm bool
+	var closeUnconfirm bool
+	p.sealChMu.Lock()
+	if p.confirmCh == confirmCh && confirmCh != nil {
+		p.confirmCh = make(chan *payload.Confirm)
+		closeConfirm = true
+	}
+	if p.unConfirmCh == unConfirmCh && unConfirmCh != nil {
+		p.unConfirmCh = make(chan *payload.Confirm)
+		closeUnconfirm = true
+	}
+	p.sealChMu.Unlock()
+
+	if closeConfirm {
+		close(confirmCh)
+	}
+	if closeUnconfirm {
+		close(unConfirmCh)
+	}
+	if closeConfirm || closeUnconfirm {
+		log.Info("reset seal channels", "reason", reason)
+	}
 }
 
 func (p *Pbft) SealHash(header *types.Header) common.Hash {
