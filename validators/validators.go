@@ -95,6 +95,7 @@ func (v *BposValidator) IsWorkingHeight(height uint64) bool {
 	if v.nextTurnValidators == nil {
 		return false
 	}
+	fmt.Println("IsWorkingHeight", "height ", height, "v.nextTurnValidators.WorkingHeight", v.nextTurnValidators.WorkingHeight)
 	return height >= v.nextTurnValidators.WorkingHeight
 }
 
