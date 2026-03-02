@@ -931,13 +931,14 @@ func (p *Pbft) Recover() {
 		!p.dispatcher.IsProducer(p.account.PublicKeyBytes()) {
 		log.Info(" [Recover]Recover Error >>>>> ")
 		p.dispatcher.GetConsensusView().DumpInfo()
+		p.isRecovering = false
 		return
 	}
 	p.isRecovering = true
-	minCount := p.dispatcher.GetConsensusView().GetMajorityCount()
 	activePeersCount := 0
 	for {
 		activePeersCount, _ = p.HasPeersMajorityCount()
+		minCount := p.dispatcher.GetConsensusView().GetMajorityCount()
 		fmt.Println("activePeersCount", activePeersCount, " minCount", minCount)
 		if p.IsCurrent() && activePeersCount > 0 &&
 			activePeersCount >= minCount {
