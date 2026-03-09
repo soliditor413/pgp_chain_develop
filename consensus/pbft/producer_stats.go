@@ -254,7 +254,7 @@ func (ps *ProducerStats) UpdateBlockHeight(blockHeight uint64, blockTime uint64,
 	if blockHeight <= ps.lastProcessedBlockHeight {
 		return
 	}
-
+	log.Info("------------ >>>>>>> UpdateBlockHeight", "blockHeight ", blockHeight, "blockTime:", blockTime)
 	// Update current block height
 	ps.currentBlockHeight = blockHeight
 	ps.lastProcessedBlockHeight = blockHeight
@@ -264,6 +264,7 @@ func (ps *ProducerStats) UpdateBlockHeight(blockHeight uint64, blockTime uint64,
 	producerSet := make(map[string]bool)
 	for _, producer := range currentProducers {
 		producerKey := common.Bytes2Hex(producer)
+		fmt.Println("producerKey ", producerKey)
 		producerSet[producerKey] = true
 	}
 
@@ -273,6 +274,7 @@ func (ps *ProducerStats) UpdateBlockHeight(blockHeight uint64, blockTime uint64,
 	for producerKey := range ps.lastParticipationTime {
 		// Only track if this producer is in the current producer list
 		if !producerSet[producerKey] {
+			log.Warn("is not in current producers ", "producer:", producerKey)
 			continue
 		}
 
@@ -280,6 +282,7 @@ func (ps *ProducerStats) UpdateBlockHeight(blockHeight uint64, blockTime uint64,
 		// If lastBlockHeight is less than current block height, they missed this block
 		if ps.lastBlockHeight[producerKey] < blockHeight {
 			ps.consecutiveMissedBlocks[producerKey]++
+			log.Info("Missed Blocks ", "producer:", producerKey, "count:", ps.consecutiveMissedBlocks[producerKey])
 			// Check if should be marked as inactive
 			if ps.consecutiveMissedBlocks[producerKey] >= InactiveThreshold {
 				if !ps.isInactive[producerKey] {
@@ -308,6 +311,7 @@ func (ps *ProducerStats) UpdateBlockHeight(blockHeight uint64, blockTime uint64,
 		producerKey := common.Bytes2Hex(producer)
 		if _, exists := ps.lastParticipationTime[producerKey]; !exists {
 			// New producer, initialize with 0 missed blocks
+			log.Info(" is New producer, set missed block to 0", " producerKey ", producerKey)
 			ps.consecutiveMissedBlocks[producerKey] = 0
 			ps.isInactive[producerKey] = false
 		}
@@ -325,6 +329,7 @@ func (ps *ProducerStats) UpdateBlockHeight(blockHeight uint64, blockTime uint64,
 
 	// Periodically cleanup old producer data that are no longer active
 	if blockHeight-ps.lastCleanupBlockHeight >= CleanupIntervalBlocks {
+		log.Info("clean up old producers ", " last clean height: ", ps.lastCleanupBlockHeight, " blockHeight ", blockHeight)
 		ps.cleanupOldProducers(currentProducers, blockHeight)
 		ps.lastCleanupBlockHeight = blockHeight
 	}
