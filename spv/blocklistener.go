@@ -42,6 +42,9 @@ func (l *BlockListener) GetDynamicArbiterHeight() uint64 {
 }
 
 func (l *BlockListener) IsBPosHeight() bool {
+	if l.blockNumber == 0 {
+		l.blockNumber = uint32(GetSpvHeight())
+	}
 	if uint64(l.blockNumber) >= l.dynamicArbiterEndHeight {
 		return true
 	}
