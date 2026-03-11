@@ -20,12 +20,13 @@ package consensus
 import (
 	"math/big"
 
+	"time"
+
 	"github.com/pgprotocol/pgp-chain/common"
 	"github.com/pgprotocol/pgp-chain/core/state"
 	"github.com/pgprotocol/pgp-chain/core/types"
 	"github.com/pgprotocol/pgp-chain/params"
 	"github.com/pgprotocol/pgp-chain/rpc"
-	"time"
 )
 
 // ChainReader defines a small collection of methods needed to access the local

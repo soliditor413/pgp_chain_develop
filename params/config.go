@@ -511,6 +511,7 @@ type PbftConfig struct {
 	DPoSV2StartHeight uint32   `json:"dposv2startheight"`
 	NodeVersion       string
 	ValidatorContract string `json:"validatorcontract,omitempty"`
+	BlacklistContract string `json:"blacklistcontract,omitempty"`
 	BPosStartHeight   uint64 `json:"bPosStartHeight,omitempty"`
 }
 
