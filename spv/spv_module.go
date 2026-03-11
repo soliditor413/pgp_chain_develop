@@ -72,6 +72,11 @@ var (
 	ErrMainTxHashCompleted = errors.New("ELAMinter: already completed")
 )
 
+// GetIPCClient exposes the SPV IPC client for internal integrations.
+func GetIPCClient() *ethclient.Client {
+	return ipcClient
+}
+
 const (
 	databaseCache int = 768
 

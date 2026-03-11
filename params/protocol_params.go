@@ -197,8 +197,8 @@ var (
 	GetMainChainRechargeData  = big.NewInt(1009)
 	GetWithdrawData           = big.NewInt(1010)
 	VerifySmallCrossTx        = big.NewInt(1011)
-	CheckProducerInactive     = big.NewInt(1012)
-	CheckProducerBlacklist    = big.NewInt(1013)
+	IsProducerAddress         = big.NewInt(1012)
+	//CheckProducerBlacklist    = big.NewInt(1013)
 )
 
 var (

@@ -22,6 +22,7 @@ import (
 	"github.com/pgprotocol/pgp-chain/common"
 	"github.com/pgprotocol/pgp-chain/common/math"
 	"github.com/pgprotocol/pgp-chain/consensus"
+	blacklistcontract "github.com/pgprotocol/pgp-chain/consensus/pbft/blacklistContract"
 	"github.com/pgprotocol/pgp-chain/core"
 	"github.com/pgprotocol/pgp-chain/core/state"
 	"github.com/pgprotocol/pgp-chain/core/types"
@@ -232,6 +233,14 @@ func New(chainConfig *params.ChainConfig, dataDir string) *Pbft {
 		log.Error("Failed to initialize producer stats", "error", err)
 		// Continue without persistence if initialization fails
 		producerStats, _ = NewProducerStats("")
+	}
+	if cfg.BlacklistContract != "" {
+		if account == nil {
+			log.Warn("Blacklist contract configured but dpos account is nil")
+		} else {
+			oracle := blacklistcontract.NewContractBlacklistOracle(cfg.BlacklistContract, account.PublicKeyBytes(), account.Sign)
+			producerStats.ConfigureBlacklist(oracle)
+		}
 	}
 	pbft.producerStats = producerStats
 
@@ -815,10 +824,18 @@ func (p *Pbft) GetProducerInactiveDuration(producerPubKey []byte) (time.Duration
 // IsProducerInBlacklist checks if a producer is in the permanent blacklist
 // This method is used by precompiled contracts via IPbftEngine interface
 func (p *Pbft) IsProducerInBlacklist(producerPubKey []byte) bool {
-	if p.producerStats == nil {
+	if len(producerPubKey) == 0 {
 		return false
 	}
-	return p.producerStats.IsInBlacklist(producerPubKey)
+	if p.cfg.BlacklistContract == "" {
+		return false
+	}
+	blacklisted, err := blacklistcontract.IsBlacklisted(p.cfg.BlacklistContract, producerPubKey)
+	if err != nil {
+		log.Error("IsProducerInBlacklist failed", "error", err)
+		return false
+	}
+	return blacklisted
 }
 
 func (p *Pbft) SignersCount() int {
