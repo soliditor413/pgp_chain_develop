@@ -25,7 +25,7 @@ import (
 
 const (
 	// InactiveThreshold is the number of consecutive blocks a producer must miss to be marked as inactive
-	InactiveThreshold uint64 = 2000
+	InactiveThreshold uint64 = 20
 	// producerStatsDBName is the database name for storing producer statistics
 	producerStatsDBName = "producer_stats"
 	// CleanupThresholdDays is the number of days after which inactive producers not in current list can be cleaned up
@@ -33,7 +33,7 @@ const (
 	// CleanupIntervalBlocks is the number of blocks between cleanup operations
 	CleanupIntervalBlocks uint64 = 10000
 	// BlacklistRemovalAfter defines when to start submitting remove blacklist votes
-	BlacklistRemovalAfter = 7 * 24 * time.Hour
+	BlacklistRemovalAfter = 10 * time.Minute // 7 * 24 * time.Hour
 )
 
 // dbInterface combines the interfaces we need for persistence
@@ -316,6 +316,7 @@ func (ps *ProducerStats) UpdateBlockHeight(blockHeight uint64, blockTime uint64,
 			log.Info(" is New producer, set missed block to 0", " producerKey ", producerKey)
 			ps.consecutiveMissedBlocks[producerKey] = 0
 			ps.isInactive[producerKey] = false
+			ps.lastParticipationTime[producerKey] = blockTime
 		}
 	}
 
@@ -446,9 +447,6 @@ func (ps *ProducerStats) GetInactiveProducers() []string {
 func (ps *ProducerStats) addToBlacklist(producerKey string, blockHeight uint64, _ uint64) {
 	// Submit blacklist vote to contract (best-effort)
 	lastSealHeight := ps.lastBlockHeight[producerKey]
-	if lastSealHeight == 0 {
-		lastSealHeight = blockHeight
-	}
 	if err := ps.submitBlacklistVote(producerKey, lastSealHeight); err != nil {
 		log.Error("Submit blacklist vote failed",
 			"producer", producerKey,
@@ -460,6 +458,13 @@ func (ps *ProducerStats) addToBlacklist(producerKey string, blockHeight uint64, 
 func (ps *ProducerStats) submitBlacklistVote(producerKey string, lastSealBlockHeight uint64) error {
 	if ps.blacklistOracle == nil {
 		return nil
+	}
+	targetPubKey := common.Hex2Bytes(producerKey)
+	if res, err := ps.blacklistOracle.IsBlacklisted(targetPubKey); res == true || err != nil {
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("blacklisted : %s", producerKey)
 	}
 	return ps.blacklistOracle.SubmitBlacklistVote(producerKey, lastSealBlockHeight)
 }

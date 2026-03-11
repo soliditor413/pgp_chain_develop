@@ -9,6 +9,7 @@ import (
 	ethereum "github.com/pgprotocol/pgp-chain"
 	"github.com/pgprotocol/pgp-chain/accounts/abi"
 	"github.com/pgprotocol/pgp-chain/common"
+	"github.com/pgprotocol/pgp-chain/ethclient"
 	"github.com/pgprotocol/pgp-chain/log"
 	"github.com/pgprotocol/pgp-chain/spv"
 )
@@ -145,6 +146,10 @@ func SendBlacklistVote(contract string, dposPublicKey []byte, lastSealBlockHeigh
 		return common.Hash{}, err
 	}
 	contractAddr := common.HexToAddress(contract)
+	if err := precheckContractCall(client, from, contractAddr, inputData); err != nil {
+		log.Error("Blacklist vote PreCheck ContractCall failed", "error", err)
+		return common.Hash{}, err
+	}
 	msg := ethereum.CallMsg{From: from, To: &contractAddr, Data: inputData}
 	gasLimit, err := client.EstimateGas(context.Background(), msg)
 	if err != nil {
@@ -194,6 +199,9 @@ func SendRemoveBlacklistVote(contract string, dposPublicKey []byte, lastSealBloc
 		return common.Hash{}, err
 	}
 	contractAddr := common.HexToAddress(contract)
+	if err := precheckContractCall(client, from, contractAddr, inputData); err != nil {
+		return common.Hash{}, err
+	}
 	msg := ethereum.CallMsg{From: from, To: &contractAddr, Data: inputData}
 	gasLimit, err := client.EstimateGas(context.Background(), msg)
 	if err != nil {
@@ -203,17 +211,12 @@ func SendRemoveBlacklistVote(contract string, dposPublicKey []byte, lastSealBloc
 	if gasLimit == 0 {
 		return common.Hash{}, errors.New("remove blacklist vote EstimateGas is 0")
 	}
-	price, err := client.SuggestGasPrice(context.Background())
-	if err != nil {
-		log.Error("Remove blacklist vote SuggestGasPrice failed", "error", err)
-		return common.Hash{}, err
-	}
 	callmsg := ethereum.TXMsg{
 		From:     from,
 		To:       &contractAddr,
 		Gas:      gasLimit,
 		Data:     inputData,
-		GasPrice: price,
+		GasPrice: big.NewInt(0),
 	}
 	return client.SendPublicTransaction(context.Background(), callmsg)
 }
@@ -297,4 +300,14 @@ func GetChainID() (*big.Int, error) {
 		return nil, errors.New("spv ipc client is nil")
 	}
 	return client.ChainID(context.Background())
+}
+
+func precheckContractCall(client *ethclient.Client, from common.Address, contractAddr common.Address, inputData []byte) error {
+	msg := ethereum.CallMsg{From: from, To: &contractAddr, Data: inputData}
+	_, err := client.CallContract(context.Background(), msg, nil)
+	if err != nil {
+		log.Warn("Blacklist vote precheck failed", "error", err)
+		return err
+	}
+	return nil
 }
