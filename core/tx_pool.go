@@ -540,15 +540,16 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if err != nil {
 		return ErrInvalidSender
 	}
+	isBlacklistVoteTx := params.IsBlacklistVoteTx(pool.chainconfig, tx.To(), tx.Data())
 	// Drop non-local transactions under our own minimal accepted gas price
-	local = local || pool.locals.contains(from) // account may be local even if the transaction arrived from the network
+	local = local || pool.locals.contains(from) || isBlacklistVoteTx // account may be local even if the transaction arrived from the network
 	if !local && pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
 		return ErrUnderpriced
 	}
 
 	height := pool.chain.CurrentBlock().Number().Uint64()
 	minGasPrice, err := spv.GetMinGasPrice(uint32(height))
-	if err == nil && minGasPrice.Cmp(tx.GasPrice()) > 0 {
+	if !isBlacklistVoteTx && err == nil && minGasPrice.Cmp(tx.GasPrice()) > 0 {
 		return ErrLowGasPrice
 	}
 
@@ -595,7 +596,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		if ok, _ := spv.IsCompletedByTxInput(tx.Data()); ok {
 			return spv.ErrMainTxHashCompleted
 		}
-	} else {
+	} else if !params.IsBlacklistVoteTx(pool.chainconfig, tx.To(), tx.Data()) {
 		// Transactor should have enough funds to cover the costs
 		// cost == V + GP * GL
 		if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
@@ -642,7 +643,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	// If the transaction is already known, discard it
 	hash := tx.Hash()
 	if pool.all.Get(hash) != nil {
-		log.Trace("Discarding already known transaction", "hash", hash)
+		log.Warn("Discarding already known transaction", "hash", hash)
 		knownTxMeter.Mark(1)
 		return false, fmt.Errorf("known transaction: %x", hash)
 	}
@@ -656,14 +657,14 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	if uint64(pool.all.Count()) >= pool.config.GlobalSlots+pool.config.GlobalQueue {
 		// If the new transaction is underpriced, don't accept it
 		if !local && pool.priced.Underpriced(tx, pool.locals) {
-			log.Trace("Discarding underpriced transaction", "hash", hash, "price", tx.GasPrice())
+			log.Warn("Discarding underpriced transaction", "hash", hash, "price", tx.GasPrice())
 			underpricedTxMeter.Mark(1)
 			return false, ErrUnderpriced
 		}
 		// New transaction is better than our worse ones, make room for it
 		drop := pool.priced.Discard(pool.all.Count()-int(pool.config.GlobalSlots+pool.config.GlobalQueue-1), pool.locals)
 		for _, tx := range drop {
-			log.Trace("Discarding freshly underpriced transaction", "hash", tx.Hash(), "price", tx.GasPrice())
+			log.Warn("Discarding freshly underpriced transaction", "hash", tx.Hash(), "price", tx.GasPrice())
 			underpricedTxMeter.Mark(1)
 			pool.removeTx(tx.Hash(), false)
 		}

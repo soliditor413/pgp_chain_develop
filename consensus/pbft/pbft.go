@@ -179,10 +179,12 @@ func New(chainConfig *params.ChainConfig, dataDir string) *Pbft {
 	medianTimeSouce := dtime.NewMedianTime()
 	blockPeriod := 3
 	pbft := &Pbft{
-		datadir:            dataDir,
-		cfg:                *cfg,
-		confirmCh:          make(chan *payload.Confirm),
-		unConfirmCh:        make(chan *payload.Confirm),
+		datadir: dataDir,
+		cfg:     *cfg,
+		// Keep one-slot buffers to avoid dropping confirm/unconfirm when vote arrives
+		// slightly before Seal starts waiting on channels.
+		confirmCh:          make(chan *payload.Confirm, 1),
+		unConfirmCh:        make(chan *payload.Confirm, 1),
 		account:            account,
 		bridgeAccount:      bridgeAccount,
 		requestedBlocks:    make(map[common.Hash]struct{}),
@@ -470,7 +472,7 @@ func (p *Pbft) VerifySeal(chain consensus.ChainReader, header *types.Header) err
 	return p.verifySeal(chain, header, nil)
 }
 
-func (p *Pbft) verifySeal(chain consensus.ChainReader, header *types.Header, parents []*types.Header) error {
+func (p *Pbft) verifySeal(chain consensus.ChainReader, header *types.Header, _ []*types.Header) error {
 	// Verifying the genesis block is not supported
 	number := header.Number.Uint64()
 	if number == 0 {
@@ -762,11 +764,11 @@ func (p *Pbft) resetSealChannels(confirmCh, unConfirmCh chan *payload.Confirm, r
 	var closeUnconfirm bool
 	p.sealChMu.Lock()
 	if p.confirmCh == confirmCh && confirmCh != nil {
-		p.confirmCh = make(chan *payload.Confirm)
+		p.confirmCh = make(chan *payload.Confirm, 1)
 		closeConfirm = true
 	}
 	if p.unConfirmCh == unConfirmCh && unConfirmCh != nil {
-		p.unConfirmCh = make(chan *payload.Confirm)
+		p.unConfirmCh = make(chan *payload.Confirm, 1)
 		closeUnconfirm = true
 	}
 	p.sealChMu.Unlock()

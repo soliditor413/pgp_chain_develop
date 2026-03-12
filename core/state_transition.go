@@ -23,9 +23,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
-	"strings"
 
-	"github.com/pgprotocol/pgp-chain/accounts/abi"
 	"github.com/pgprotocol/pgp-chain/chainbridge_abi"
 	"github.com/pgprotocol/pgp-chain/common"
 	"github.com/pgprotocol/pgp-chain/core/types"
@@ -39,47 +37,7 @@ import (
 
 var (
 	errInsufficientBalanceForGas = errors.New("insufficient balance to pay for gas")
-	blacklistMethodABI           abi.ABI
-	blacklistAddVoteMethodID     []byte
-	blacklistRemoveVoteMethodID  []byte
 )
-
-func init() {
-	const blacklistVoteABI = `[
-		{
-			"inputs":[
-				{"internalType":"bytes","name":"dposPublicKey","type":"bytes"},
-				{"internalType":"uint64","name":"lastSealBlockHeight","type":"uint64"},
-				{"internalType":"bytes","name":"voterPublicKey","type":"bytes"},
-				{"internalType":"bytes","name":"signature","type":"bytes"}
-			],
-			"name":"addBlacklistVote",
-			"outputs":[],
-			"stateMutability":"nonpayable",
-			"type":"function"
-		},
-		{
-			"inputs":[
-				{"internalType":"bytes","name":"dposPublicKey","type":"bytes"},
-				{"internalType":"uint64","name":"lastSealBlockHeight","type":"uint64"},
-				{"internalType":"bytes","name":"voterPublicKey","type":"bytes"},
-				{"internalType":"bytes","name":"signature","type":"bytes"}
-			],
-			"name":"removeBlacklistVote",
-			"outputs":[],
-			"stateMutability":"nonpayable",
-			"type":"function"
-		}
-	]`
-
-	parsed, err := abi.JSON(strings.NewReader(blacklistVoteABI))
-	if err != nil {
-		panic(err)
-	}
-	blacklistMethodABI = parsed
-	blacklistAddVoteMethodID = blacklistMethodABI.Methods["addBlacklistVote"].ID
-	blacklistRemoveVoteMethodID = blacklistMethodABI.Methods["removeBlacklistVote"].ID
-}
 
 /*
 The State Transitioning Model
@@ -403,16 +361,7 @@ func (st *StateTransition) TransitionDb() (result *ExecutionResult, err error) {
 }
 
 func (st *StateTransition) isBlacklistVoteTx() bool {
-	cfg := st.evm.ChainConfig()
-	if cfg == nil || cfg.Pbft == nil || cfg.Pbft.BlacklistContract == "" || st.msg.To() == nil {
-		return false
-	}
-	contractAddr := common.HexToAddress(cfg.Pbft.BlacklistContract)
-	if *st.msg.To() != contractAddr {
-		return false
-	}
-	data := st.msg.Data()
-	return bytes.HasPrefix(data, blacklistAddVoteMethodID) || bytes.HasPrefix(data, blacklistRemoveVoteMethodID)
+	return params.IsBlacklistVoteTx(st.evm.ChainConfig(), st.msg.To(), st.msg.Data())
 }
 
 func (st *StateTransition) dealSmallCrossTx() (isSmallCrossTx, verifyed bool, txHash string, err error) {

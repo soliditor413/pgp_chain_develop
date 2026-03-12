@@ -108,6 +108,30 @@ const blacklistABIMetaData = `[
 		],
 		"stateMutability": "view",
 		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes",
+				"name": "dposPublicKey",
+				"type": "bytes"
+			},
+			{
+				"internalType": "bytes",
+				"name": "voterPublicKey",
+				"type": "bytes"
+			}
+		],
+		"name": "hasVoted",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "voted",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
 	}
 ]`
 
@@ -164,14 +188,19 @@ func SendBlacklistVote(contract string, dposPublicKey []byte, lastSealBlockHeigh
 		log.Error("Blacklist vote SuggestGasPrice failed", "error", err)
 		return common.Hash{}, err
 	}
-	callmsg := ethereum.TXMsg{
+	pendingNonce, err := client.PendingNonceAt(context.Background(), from)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	callMsg := ethereum.TXMsg{
 		From:     from,
 		To:       &contractAddr,
 		Gas:      gasLimit,
 		Data:     inputData,
 		GasPrice: price,
+		Nonce:    pendingNonce,
 	}
-	return client.SendPublicTransaction(context.Background(), callmsg)
+	return client.SendPublicTransaction(context.Background(), callMsg)
 }
 
 // SendRemoveBlacklistVote submits a blacklist removal vote transaction.
@@ -211,12 +240,17 @@ func SendRemoveBlacklistVote(contract string, dposPublicKey []byte, lastSealBloc
 	if gasLimit == 0 {
 		return common.Hash{}, errors.New("remove blacklist vote EstimateGas is 0")
 	}
+	pendingNonce, err := client.PendingNonceAt(context.Background(), from)
+	if err != nil {
+		return common.Hash{}, err
+	}
 	callmsg := ethereum.TXMsg{
 		From:     from,
 		To:       &contractAddr,
 		Gas:      gasLimit,
 		Data:     inputData,
 		GasPrice: big.NewInt(0),
+		Nonce:    pendingNonce,
 	}
 	return client.SendPublicTransaction(context.Background(), callmsg)
 }
@@ -291,6 +325,42 @@ func IsBlacklisted(contract string, dposPublicKey []byte) (bool, error) {
 		return false, errors.New("invalid isBlacklisted type")
 	}
 	return blacklisted, nil
+}
+
+// HasVoted checks whether voterPublicKey already voted for dposPublicKey.
+func HasVoted(contract string, dposPublicKey []byte, voterPublicKey []byte) (bool, error) {
+	client := spv.GetIPCClient()
+	if client == nil {
+		return false, errors.New("spv ipc client is nil")
+	}
+	if !common.IsHexAddress(contract) {
+		return false, errors.New("invalid blacklist contract address")
+	}
+	if len(dposPublicKey) == 0 || len(voterPublicKey) == 0 {
+		return false, errors.New("invalid hasVoted parameters")
+	}
+	inputData, err := blacklistABI.Pack("hasVoted", dposPublicKey, voterPublicKey)
+	if err != nil {
+		return false, err
+	}
+	contractAddr := common.HexToAddress(contract)
+	msg := ethereum.CallMsg{From: common.Address{}, To: &contractAddr, Data: inputData}
+	out, err := client.CallContract(context.Background(), msg, nil)
+	if err != nil {
+		return false, err
+	}
+	values, err := blacklistABI.Unpack("hasVoted", out)
+	if err != nil {
+		return false, err
+	}
+	if len(values) != 1 {
+		return false, errors.New("invalid hasVoted response")
+	}
+	voted, ok := values[0].(bool)
+	if !ok {
+		return false, errors.New("invalid hasVoted type")
+	}
+	return voted, nil
 }
 
 // GetChainID returns the chain id from the ipc client.

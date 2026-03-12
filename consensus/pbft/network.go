@@ -167,10 +167,14 @@ func (p *Pbft) UpdateCurrentProducers(producers [][]byte, totalCount int, spvHei
 }
 
 func (p *Pbft) GetCurrentProducers() [][]byte {
-	if p.dispatcher != nil {
-		return p.dispatcher.GetConsensusView().GetProducers()
+	list := p.dispatcher.GetConsensusView().GetProducers()
+	if len(list) == 0 {
+		height := p.chain.CurrentHeader().Height()
+		if p.bPosValidator.IsBPosFork(height) {
+			list, _, _ = p.bPosValidator.GetNextValidatorSet(height)
+		}
 	}
-	return [][]byte{}
+	return list
 }
 
 func (p *Pbft) IsProducerByAccount(account []byte) bool {

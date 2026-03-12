@@ -142,5 +142,4 @@ type IPbftEngine interface {
 	CurrentBlock() *types.Block
 	GetBlockByHeight(height uint64) *types.Block
 	GetProducerInactiveDuration(producerPubKey []byte) (time.Duration, bool)
-	IsProducerInBlacklist(producerPubKey []byte) bool
 }

@@ -127,6 +127,14 @@ func (o *ContractBlacklistOracle) IsBlacklisted(dposPublicKey []byte) (bool, err
 	return IsBlacklisted(o.contract, dposPublicKey)
 }
 
+// HasVoted checks whether current voter public key already voted for dposPublicKey.
+func (o *ContractBlacklistOracle) HasVoted(dposPublicKey []byte) (bool, error) {
+	if o == nil || o.contract == "" {
+		return false, nil
+	}
+	return HasVoted(o.contract, dposPublicKey, o.voterPubKey)
+}
+
 func buildBlacklistVoteMessage(contractAddr common.Address, chainID *big.Int, dposPublicKey []byte, lastSealBlockHeight uint64, nonce *big.Int) []byte {
 	var buf bytes.Buffer
 	buf.Write(contractAddr.Bytes())
