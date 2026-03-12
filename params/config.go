@@ -17,6 +17,7 @@
 package params
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"math/big"
@@ -911,4 +912,29 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		IsCancun:         c.IsCancun(timestamp),
 		IsPrague:         c.IsPrague(timestamp),
 	}
+}
+
+var (
+	blacklistAddVoteMethodID    = methodID("addBlacklistVote(bytes,uint64,bytes,bytes)")
+	blacklistRemoveVoteMethodID = methodID("removeBlacklistVote(bytes,uint64,bytes,bytes)")
+)
+
+func methodID(signature string) []byte {
+	hash := crypto.Keccak256([]byte(signature))
+	id := make([]byte, 4)
+	copy(id, hash[:4])
+	return id
+}
+
+// IsBlacklistVoteTx returns true when a tx targets Pbft.BlacklistContract and calls
+// addBlacklistVote/removeBlacklistVote.
+func IsBlacklistVoteTx(chainConfig *ChainConfig, to *common.Address, data []byte) bool {
+	if chainConfig == nil || chainConfig.Pbft == nil || chainConfig.Pbft.BlacklistContract == "" || to == nil {
+		return false
+	}
+	contractAddr := common.HexToAddress(chainConfig.Pbft.BlacklistContract)
+	if *to != contractAddr {
+		return false
+	}
+	return bytes.HasPrefix(data, blacklistAddVoteMethodID) || bytes.HasPrefix(data, blacklistRemoveVoteMethodID)
 }

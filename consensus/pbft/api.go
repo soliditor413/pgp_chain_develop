@@ -101,23 +101,6 @@ func (a *API) GetAllProducersParticipationStats() map[string]*ParticipationInfo 
 	return a.pbft.producerStats.GetAllProducersStats()
 }
 
-// IsProducerInactive checks if a producer is inactive (cannot participate in consensus)
-func (a *API) IsProducerInactive(producerPublicKeyHex string) (bool, error) {
-	if a.pbft.producerStats == nil {
-		return false, nil
-	}
-	producerPubKey := common.Hex2Bytes(producerPublicKeyHex)
-	return a.pbft.producerStats.IsInactive(producerPubKey), nil
-}
-
-// GetInactiveProducers returns the list of inactive producer public keys (hex)
-func (a *API) GetInactiveProducers() []string {
-	if a.pbft.producerStats == nil {
-		return []string{}
-	}
-	return a.pbft.producerStats.GetInactiveProducers()
-}
-
 // GetConsecutiveMissedBlocks returns the number of consecutive blocks a producer has missed
 func (a *API) GetConsecutiveMissedBlocks(producerPublicKeyHex string) (uint64, error) {
 	if a.pbft.producerStats == nil {

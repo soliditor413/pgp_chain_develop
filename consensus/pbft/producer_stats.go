@@ -28,8 +28,6 @@ const (
 	InactiveThreshold uint64 = 20
 	// producerStatsDBName is the database name for storing producer statistics
 	producerStatsDBName = "producer_stats"
-	// CleanupThresholdDays is the number of days after which inactive producers not in current list can be cleaned up
-	CleanupThresholdDays = 30
 	// CleanupIntervalBlocks is the number of blocks between cleanup operations
 	CleanupIntervalBlocks uint64 = 10000
 	// BlacklistRemovalAfter defines when to start submitting remove blacklist votes
@@ -52,8 +50,6 @@ type ProducerStats struct {
 	participationCount       map[string]uint64 // key: producer public key (hex), value: participation count
 	lastBlockHeight          map[string]uint64 // key: producer public key (hex), value: last block height
 	consecutiveMissedBlocks  map[string]uint64 // key: producer public key (hex), value: consecutive missed blocks
-	isInactive               map[string]bool   // key: producer public key (hex), value: true if inactive (cannot participate in consensus)
-	removeVoteSubmitted      map[string]bool   // key: producer public key (hex), value: true if remove vote already submitted
 	currentBlockHeight       uint64            // current block height for tracking
 	lastProcessedBlockHeight uint64            // last processed block height to avoid duplicate processing
 	lastCleanupBlockHeight   uint64            // last block height when cleanup was performed
@@ -70,8 +66,6 @@ func NewProducerStats(dataDir string) (*ProducerStats, error) {
 		participationCount:       make(map[string]uint64),
 		lastBlockHeight:          make(map[string]uint64),
 		consecutiveMissedBlocks:  make(map[string]uint64),
-		isInactive:               make(map[string]bool),
-		removeVoteSubmitted:      make(map[string]bool),
 		currentBlockHeight:       0,
 		lastProcessedBlockHeight: 0,
 		lastCleanupBlockHeight:   0,
@@ -135,15 +129,6 @@ func (ps *ProducerStats) RecordParticipation(producerPubKey []byte, blockHeight 
 
 	// Reset consecutive missed blocks when producer participates
 	ps.consecutiveMissedBlocks[producerKey] = 0
-
-	// Remove inactive status if producer participates again
-	if ps.isInactive[producerKey] {
-		ps.isInactive[producerKey] = false
-		ps.removeVoteSubmitted[producerKey] = false
-		log.Info("Producer removed from inactive status due to participation",
-			"producer", producerKey,
-			"height", blockHeight)
-	}
 
 	log.Info("Record producer participation",
 		"producer", producerKey,
@@ -281,32 +266,22 @@ func (ps *ProducerStats) UpdateBlockHeight(blockHeight uint64, blockTime uint64,
 		// If lastBlockHeight is less than current block height, they missed this block
 		if ps.lastBlockHeight[producerKey] < blockHeight {
 			ps.consecutiveMissedBlocks[producerKey]++
-			log.Info("Missed Blocks ", "producer:", producerKey, "count:", ps.consecutiveMissedBlocks[producerKey])
+			log.Info("Missed Blocks ", "producer:", producerKey, "count:", ps.consecutiveMissedBlocks[producerKey], " InactiveThreshold:", InactiveThreshold)
 			// Check if should be marked as inactive
 			if ps.consecutiveMissedBlocks[producerKey] >= InactiveThreshold {
-				if !ps.isInactive[producerKey] {
-					ps.isInactive[producerKey] = true
-					ps.removeVoteSubmitted[producerKey] = false
-
-					// Add to blacklist (permanent record)
-					ps.addToBlacklist(producerKey, blockHeight, blockTime)
-
-					log.Warn("Producer marked as inactive and added to blacklist (cannot participate in consensus)",
-						"producer", producerKey,
-						"consecutiveMissedBlocks", ps.consecutiveMissedBlocks[producerKey],
-						"height", blockHeight)
-					needsSave = true
-					ps.saveProducerToDB(producerKey)
-				}
-			} else {
-				// Update even if not inactive yet
-				needsSave = true
-				ps.saveProducerToDB(producerKey)
+				// Add to blacklist (permanent record)
+				ps.addToBlacklist(producerKey, blockHeight, blockTime)
+				log.Warn("Producer marked as inactive and added to blacklist (cannot participate in consensus)",
+					"producer", producerKey,
+					"consecutiveMissedBlocks", ps.consecutiveMissedBlocks[producerKey],
+					"height", blockHeight)
 			}
+			needsSave = true
+			ps.saveProducerToDB(producerKey)
 		}
 	}
 
-	ps.trySubmitRemoveBlacklistVotes(blockHeight, blockTime)
+	ps.trySubmitRemoveBlacklistVotes(blockTime)
 
 	// Also initialize tracking for new producers in the current list
 	for _, producer := range currentProducers {
@@ -314,8 +289,7 @@ func (ps *ProducerStats) UpdateBlockHeight(blockHeight uint64, blockTime uint64,
 		if _, exists := ps.lastParticipationTime[producerKey]; !exists {
 			// New producer, initialize with 0 missed blocks
 			log.Info(" is New producer, set missed block to 0", " producerKey ", producerKey)
-			ps.consecutiveMissedBlocks[producerKey] = 0
-			ps.isInactive[producerKey] = false
+			ps.consecutiveMissedBlocks[producerKey] = 1
 			ps.lastParticipationTime[producerKey] = blockTime
 		}
 	}
@@ -333,42 +307,26 @@ func (ps *ProducerStats) UpdateBlockHeight(blockHeight uint64, blockTime uint64,
 	// Periodically cleanup old producer data that are no longer active
 	if blockHeight-ps.lastCleanupBlockHeight >= CleanupIntervalBlocks {
 		log.Info("clean up old producers ", " last clean height: ", ps.lastCleanupBlockHeight, " blockHeight ", blockHeight)
-		ps.cleanupOldProducers(currentProducers, blockHeight)
+		ps.cleanupOldProducers(blockHeight)
 		ps.lastCleanupBlockHeight = blockHeight
 	}
 }
 
 // cleanupOldProducers removes producer data that are no longer in the current producer list
 // and haven't participated for a long time (CleanupThresholdDays)
-func (ps *ProducerStats) cleanupOldProducers(currentProducers [][]byte, currentHeight uint64) {
-	// Create a set of current producers for quick lookup
-	producerSet := make(map[string]bool)
-	for _, producer := range currentProducers {
-		producerKey := common.Bytes2Hex(producer)
-		producerSet[producerKey] = true
-	}
-
-	// Calculate cleanup threshold time
-	cleanupThresholdTime := time.Now().AddDate(0, 0, -CleanupThresholdDays).Unix()
-	cleanupThresholdHeight := currentHeight - (CleanupThresholdDays * 24 * 60 * 60 / 3) // Assuming 3 seconds per block
-
+func (ps *ProducerStats) cleanupOldProducers(currentHeight uint64) {
 	// Find producers to cleanup
 	producersToCleanup := make([]string, 0)
 	for producerKey := range ps.lastParticipationTime {
-		// Skip if producer is in current list
-		if producerSet[producerKey] {
-			continue
-		}
 
 		// Check if producer hasn't participated for a long time
 		lastTimeSec := ps.lastParticipationTime[producerKey]
-		lastHeight := ps.lastBlockHeight[producerKey]
 
 		// Cleanup if:
 		// 1. Not in current producer list AND
 		// 2. Last participation was more than CleanupThresholdDays ago OR
 		// 3. Last participation height is more than cleanupThresholdHeight blocks ago
-		if (lastTimeSec > 0 && int64(lastTimeSec) < cleanupThresholdTime) || lastHeight < cleanupThresholdHeight {
+		if lastTimeSec > 0 {
 			producersToCleanup = append(producersToCleanup, producerKey)
 		}
 	}
@@ -381,8 +339,6 @@ func (ps *ProducerStats) cleanupOldProducers(currentProducers [][]byte, currentH
 		delete(ps.participationCount, producerKey)
 		delete(ps.lastBlockHeight, producerKey)
 		delete(ps.consecutiveMissedBlocks, producerKey)
-		delete(ps.isInactive, producerKey)
-		delete(ps.removeVoteSubmitted, producerKey)
 
 		// Remove from database
 		if ps.db != nil {
@@ -403,19 +359,6 @@ func (ps *ProducerStats) cleanupOldProducers(currentProducers [][]byte, currentH
 	}
 }
 
-// IsInactive checks if a producer is inactive (cannot participate in consensus)
-func (ps *ProducerStats) IsInactive(producerPubKey []byte) bool {
-	if len(producerPubKey) == 0 {
-		return false
-	}
-
-	ps.mu.RLock()
-	defer ps.mu.RUnlock()
-
-	producerKey := common.Bytes2Hex(producerPubKey)
-	return ps.isInactive[producerKey]
-}
-
 // GetConsecutiveMissedBlocks returns the number of consecutive blocks a producer has missed
 func (ps *ProducerStats) GetConsecutiveMissedBlocks(producerPubKey []byte) uint64 {
 	if len(producerPubKey) == 0 {
@@ -429,22 +372,8 @@ func (ps *ProducerStats) GetConsecutiveMissedBlocks(producerPubKey []byte) uint6
 	return ps.consecutiveMissedBlocks[producerKey]
 }
 
-// GetInactiveProducers returns the list of inactive producer public keys (hex)
-func (ps *ProducerStats) GetInactiveProducers() []string {
-	ps.mu.RLock()
-	defer ps.mu.RUnlock()
-
-	inactive := make([]string, 0, len(ps.isInactive))
-	for producerKey, isInactive := range ps.isInactive {
-		if isInactive {
-			inactive = append(inactive, producerKey)
-		}
-	}
-	return inactive
-}
-
 // addToBlacklist adds a producer to the blacklist
-func (ps *ProducerStats) addToBlacklist(producerKey string, blockHeight uint64, _ uint64) {
+func (ps *ProducerStats) addToBlacklist(producerKey string, _ uint64, _ uint64) {
 	// Submit blacklist vote to contract (best-effort)
 	lastSealHeight := ps.lastBlockHeight[producerKey]
 	if err := ps.submitBlacklistVote(producerKey, lastSealHeight); err != nil {
@@ -460,6 +389,12 @@ func (ps *ProducerStats) submitBlacklistVote(producerKey string, lastSealBlockHe
 		return nil
 	}
 	targetPubKey := common.Hex2Bytes(producerKey)
+	if voted, err := ps.blacklistOracle.HasVoted(targetPubKey); voted || err != nil {
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("already voted for : %s", producerKey)
+	}
 	if res, err := ps.blacklistOracle.IsBlacklisted(targetPubKey); res == true || err != nil {
 		if err != nil {
 			return err
@@ -469,15 +404,12 @@ func (ps *ProducerStats) submitBlacklistVote(producerKey string, lastSealBlockHe
 	return ps.blacklistOracle.SubmitBlacklistVote(producerKey, lastSealBlockHeight)
 }
 
-func (ps *ProducerStats) trySubmitRemoveBlacklistVotes(blockHeight uint64, blockTime uint64) {
+func (ps *ProducerStats) trySubmitRemoveBlacklistVotes(blockTime uint64) {
 	if ps.blacklistOracle == nil {
 		return
 	}
 	now := time.Unix(int64(blockTime), 0)
-	for producerKey, inactive := range ps.isInactive {
-		if !inactive || ps.removeVoteSubmitted[producerKey] {
-			continue
-		}
+	for producerKey := range ps.lastParticipationTime {
 		lastTimeSec := ps.lastParticipationTime[producerKey]
 		if lastTimeSec == 0 {
 			continue
@@ -486,10 +418,24 @@ func (ps *ProducerStats) trySubmitRemoveBlacklistVotes(blockHeight uint64, block
 		if now.Sub(lastTime) < BlacklistRemovalAfter {
 			continue
 		}
-		lastSealHeight := ps.lastBlockHeight[producerKey]
-		if lastSealHeight == 0 {
-			lastSealHeight = blockHeight
+		targetPubKey := common.Hex2Bytes(producerKey)
+		isBlacklisted, err := ps.blacklistOracle.IsBlacklisted(targetPubKey)
+		if err != nil {
+			log.Error("Query blacklist status failed", "producer", producerKey, "error", err)
+			continue
 		}
+		if !isBlacklisted {
+			continue
+		}
+		voted, err := ps.blacklistOracle.HasVoted(targetPubKey)
+		if err != nil {
+			log.Error("Query hasVoted failed", "producer", producerKey, "error", err)
+			continue
+		}
+		if voted {
+			continue
+		}
+		lastSealHeight := ps.lastBlockHeight[producerKey]
 		if err := ps.blacklistOracle.RemoveBlacklistVote(producerKey, lastSealHeight); err != nil {
 			log.Error("Submit remove blacklist vote failed",
 				"producer", producerKey,
@@ -497,7 +443,6 @@ func (ps *ProducerStats) trySubmitRemoveBlacklistVotes(blockHeight uint64, block
 				"error", err)
 			continue
 		}
-		ps.removeVoteSubmitted[producerKey] = true
 		ps.saveProducerToDB(producerKey)
 	}
 }
@@ -506,17 +451,6 @@ func (ps *ProducerStats) getNow() time.Time {
 	ps.mu.RLock()
 	now := ps.currentBlockTime
 	ps.mu.RUnlock()
-	if now.IsZero() {
-		return time.Now()
-	}
-	return now
-}
-
-// getNowWithLock returns the current block time when the caller already holds
-// the mutex (Lock or RLock). This avoids attempting to acquire the lock twice,
-// which can deadlock when invoked from code paths that already hold ps.mu.
-func (ps *ProducerStats) getNowWithLock() time.Time {
-	now := ps.currentBlockTime
 	if now.IsZero() {
 		return time.Now()
 	}
@@ -536,8 +470,6 @@ type ProducerStatsData struct {
 	ParticipationCount      uint64 `json:"participationCount"`
 	LastBlockHeight         uint64 `json:"lastBlockHeight"`
 	ConsecutiveMissedBlocks uint64 `json:"consecutiveMissedBlocks"`
-	IsInactive              bool   `json:"isInactive"`
-	RemoveVoteSubmitted     bool   `json:"removeVoteSubmitted"`
 }
 
 // saveProducerToDB saves a producer's statistics to the database
@@ -551,8 +483,6 @@ func (ps *ProducerStats) saveProducerToDB(producerKey string) {
 		ParticipationCount:      ps.participationCount[producerKey],
 		LastBlockHeight:         ps.lastBlockHeight[producerKey],
 		ConsecutiveMissedBlocks: ps.consecutiveMissedBlocks[producerKey],
-		IsInactive:              ps.isInactive[producerKey],
-		RemoveVoteSubmitted:     ps.removeVoteSubmitted[producerKey],
 	}
 
 	jsonData, err := json.Marshal(data)
@@ -609,8 +539,6 @@ func (ps *ProducerStats) loadFromDB() error {
 		ps.participationCount[producerKey] = data.ParticipationCount
 		ps.lastBlockHeight[producerKey] = data.LastBlockHeight
 		ps.consecutiveMissedBlocks[producerKey] = data.ConsecutiveMissedBlocks
-		ps.isInactive[producerKey] = data.IsInactive
-		ps.removeVoteSubmitted[producerKey] = data.RemoveVoteSubmitted
 
 		count++
 	}

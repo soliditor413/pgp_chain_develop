@@ -24,7 +24,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/pgprotocol/pgp-chain"
+	ethereum "github.com/pgprotocol/pgp-chain"
 	"github.com/pgprotocol/pgp-chain/common"
 	"github.com/pgprotocol/pgp-chain/common/hexutil"
 	"github.com/pgprotocol/pgp-chain/core/types"
@@ -549,6 +549,9 @@ func toSendTxArg(msg ethereum.TXMsg) interface{} {
 	arg := map[string]interface{}{
 		"from": msg.From,
 		"to":   msg.To,
+	}
+	if msg.Nonce != 0 {
+		arg["nonce"] = hexutil.Uint64(msg.Nonce)
 	}
 	if len(msg.Data) > 0 {
 		arg["data"] = hexutil.Bytes(msg.Data)
