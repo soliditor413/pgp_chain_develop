@@ -29,8 +29,6 @@ import (
 
 	"golang.org/x/net/context"
 
-	"time"
-
 	"github.com/elastos/Elastos.ELA.SPV/bloom"
 	spv "github.com/elastos/Elastos.ELA.SPV/interface"
 	"github.com/elastos/Elastos.ELA.SPV/util"
@@ -1234,19 +1232,4 @@ func Close() {
 		close(stopChn)
 	}
 	fmt.Println("spv close 33333333")
-}
-
-// CheckProducerInactive checks if a producer has been inactive for more than the specified duration
-// This function is used by precompiled contracts to check producer status
-func CheckProducerInactive(producerPubKey []byte, inactiveThreshold time.Duration) (bool, error) {
-	if PbftEngine == nil {
-		return false, errors.New("PbftEngine is nil")
-	}
-
-	// Use the IPbftEngine interface method to get inactive duration
-	duration, neverParticipated := PbftEngine.GetProducerInactiveDuration(producerPubKey)
-	if neverParticipated {
-		return true, nil // Never participated means inactive
-	}
-	return duration > inactiveThreshold, nil
 }

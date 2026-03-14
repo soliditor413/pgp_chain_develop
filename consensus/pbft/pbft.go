@@ -814,15 +814,6 @@ func (p *Pbft) Close() error {
 	return nil
 }
 
-// GetProducerInactiveDuration returns the inactive duration for a producer
-// This method is used by precompiled contracts via IPbftEngine interface
-func (p *Pbft) GetProducerInactiveDuration(producerPubKey []byte) (time.Duration, bool) {
-	if p.producerStats == nil {
-		return 0, true
-	}
-	return p.producerStats.GetInactiveDuration(producerPubKey)
-}
-
 // IsProducerInBlacklist checks if a producer is in the permanent blacklist
 // This method is used by precompiled contracts via IPbftEngine interface
 func (p *Pbft) IsProducerInBlacklist(producerPubKey []byte) bool {
