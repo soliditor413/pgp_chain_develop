@@ -20,8 +20,6 @@ package consensus
 import (
 	"math/big"
 
-	"time"
-
 	"github.com/pgprotocol/pgp-chain/common"
 	"github.com/pgprotocol/pgp-chain/core/state"
 	"github.com/pgprotocol/pgp-chain/core/types"
@@ -141,5 +139,4 @@ type IPbftEngine interface {
 	GetPbftConfig() params.PbftConfig
 	CurrentBlock() *types.Block
 	GetBlockByHeight(height uint64) *types.Block
-	GetProducerInactiveDuration(producerPubKey []byte) (time.Duration, bool)
 }

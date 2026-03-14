@@ -140,31 +140,6 @@ func (ps *ProducerStats) RecordParticipation(producerPubKey []byte, blockHeight 
 	ps.saveProducerToDB(producerKey)
 }
 
-// GetInactiveDuration returns how long a producer has been inactive (not participating in consensus)
-// Returns the duration in seconds, and true if the producer has never participated
-func (ps *ProducerStats) GetInactiveDuration(producerPubKey []byte) (duration time.Duration, neverParticipated bool) {
-	if len(producerPubKey) == 0 {
-		return 0, true
-	}
-
-	ps.mu.RLock()
-	defer ps.mu.RUnlock()
-
-	producerKey := common.Bytes2Hex(producerPubKey)
-	lastTimeSec, exists := ps.lastParticipationTime[producerKey]
-
-	if !exists {
-		return 0, true
-	}
-
-	nowSec := ps.getNow().Unix()
-	if nowSec < 0 || lastTimeSec > uint64(nowSec) {
-		return 0, false
-	}
-	duration = time.Duration(nowSec-int64(lastTimeSec)) * time.Second
-	return duration, false
-}
-
 // GetParticipationInfo returns detailed participation information for a producer
 type ParticipationInfo struct {
 	ProducerPublicKey     string        `json:"producerPublicKey"`
@@ -173,58 +148,6 @@ type ParticipationInfo struct {
 	ParticipationCount    uint64        `json:"participationCount"`
 	LastBlockHeight       uint64        `json:"lastBlockHeight"`
 	NeverParticipated     bool          `json:"neverParticipated"`
-}
-
-func (ps *ProducerStats) GetParticipationInfo(producerPubKey []byte) *ParticipationInfo {
-	if len(producerPubKey) == 0 {
-		return nil
-	}
-
-	ps.mu.RLock()
-	defer ps.mu.RUnlock()
-
-	producerKey := common.Bytes2Hex(producerPubKey)
-	lastTimeSec, exists := ps.lastParticipationTime[producerKey]
-
-	info := &ParticipationInfo{
-		ProducerPublicKey: producerKey,
-		NeverParticipated: !exists,
-	}
-
-	if exists {
-		info.LastParticipationTime = lastTimeSec
-		nowSec := ps.getNow().Unix()
-		if nowSec >= 0 && lastTimeSec <= uint64(nowSec) {
-			info.InactiveDuration = time.Duration(int64(nowSec)-int64(lastTimeSec)) * time.Second
-		}
-		info.ParticipationCount = ps.participationCount[producerKey]
-		info.LastBlockHeight = ps.lastBlockHeight[producerKey]
-	}
-
-	return info
-}
-
-// GetAllProducersStats returns participation statistics for all known producers
-func (ps *ProducerStats) GetAllProducersStats() map[string]*ParticipationInfo {
-	ps.mu.RLock()
-	defer ps.mu.RUnlock()
-
-	result := make(map[string]*ParticipationInfo)
-	nowSec := ps.getNow().Unix()
-
-	for producerKey := range ps.lastParticipationTime {
-		lastSec := ps.lastParticipationTime[producerKey]
-		result[producerKey] = &ParticipationInfo{
-			ProducerPublicKey:     producerKey,
-			LastParticipationTime: lastSec,
-			InactiveDuration:      durationSinceSec(nowSec, lastSec),
-			ParticipationCount:    ps.participationCount[producerKey],
-			LastBlockHeight:       ps.lastBlockHeight[producerKey],
-			NeverParticipated:     false,
-		}
-	}
-
-	return result
 }
 
 // UpdateBlockHeight updates the block height/time and checks for inactive producers
@@ -302,60 +225,6 @@ func (ps *ProducerStats) UpdateBlockHeight(blockHeight uint64, blockTime uint64,
 		if err := ps.db.Put(key, value); err != nil {
 			log.Error("Failed to save current block height", "error", err)
 		}
-	}
-
-	// Periodically cleanup old producer data that are no longer active
-	if blockHeight-ps.lastCleanupBlockHeight >= CleanupIntervalBlocks {
-		log.Info("clean up old producers ", " last clean height: ", ps.lastCleanupBlockHeight, " blockHeight ", blockHeight)
-		ps.cleanupOldProducers(blockHeight)
-		ps.lastCleanupBlockHeight = blockHeight
-	}
-}
-
-// cleanupOldProducers removes producer data that are no longer in the current producer list
-// and haven't participated for a long time (CleanupThresholdDays)
-func (ps *ProducerStats) cleanupOldProducers(currentHeight uint64) {
-	// Find producers to cleanup
-	producersToCleanup := make([]string, 0)
-	for producerKey := range ps.lastParticipationTime {
-
-		// Check if producer hasn't participated for a long time
-		lastTimeSec := ps.lastParticipationTime[producerKey]
-
-		// Cleanup if:
-		// 1. Not in current producer list AND
-		// 2. Last participation was more than CleanupThresholdDays ago OR
-		// 3. Last participation height is more than cleanupThresholdHeight blocks ago
-		if lastTimeSec > 0 {
-			producersToCleanup = append(producersToCleanup, producerKey)
-		}
-	}
-
-	// Remove from memory and database
-	cleanedCount := 0
-	for _, producerKey := range producersToCleanup {
-		// Remove from memory
-		delete(ps.lastParticipationTime, producerKey)
-		delete(ps.participationCount, producerKey)
-		delete(ps.lastBlockHeight, producerKey)
-		delete(ps.consecutiveMissedBlocks, producerKey)
-
-		// Remove from database
-		if ps.db != nil {
-			key := []byte("producer:" + producerKey)
-			if err := ps.db.Delete(key); err != nil {
-				log.Error("Failed to delete producer stats from database", "producer", producerKey, "error", err)
-			}
-		}
-
-		cleanedCount++
-	}
-
-	if cleanedCount > 0 {
-		log.Info("Cleaned up old producer statistics",
-			"producerStatsCleaned", cleanedCount,
-			"height", currentHeight,
-			"remainingProducers", len(ps.lastParticipationTime))
 	}
 }
 
@@ -455,13 +324,6 @@ func (ps *ProducerStats) getNow() time.Time {
 		return time.Now()
 	}
 	return now
-}
-
-func durationSinceSec(nowSec int64, pastSec uint64) time.Duration {
-	if nowSec < 0 || pastSec > uint64(nowSec) {
-		return 0
-	}
-	return time.Duration(int64(nowSec)-int64(pastSec)) * time.Second
 }
 
 // ProducerStatsData represents the serialized data for a producer
