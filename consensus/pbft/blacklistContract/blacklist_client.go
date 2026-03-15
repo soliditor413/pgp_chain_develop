@@ -122,7 +122,7 @@ const blacklistABIMetaData = `[
 				"type": "bytes"
 			}
 		],
-		"name": "hasVoted",
+		"name": "hasAddVoted",
 		"outputs": [
 			{
 				"internalType": "bool",
@@ -132,10 +132,135 @@ const blacklistABIMetaData = `[
 		],
 		"stateMutability": "view",
 		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes",
+				"name": "dposPublicKey",
+				"type": "bytes"
+			},
+			{
+				"internalType": "bytes",
+				"name": "voterPublicKey",
+				"type": "bytes"
+			}
+		],
+		"name": "hasRemoveVoted",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "voted",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes",
+				"name": "dposPublicKey",
+				"type": "bytes"
+			}
+		],
+		"name": "getBlacklistEntry",
+		"outputs": [
+			{
+				"components": [
+					{
+						"internalType": "bytes",
+						"name": "dposPublicKey",
+						"type": "bytes"
+					},
+					{
+						"internalType": "uint256",
+						"name": "startedAtHeight",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "addedAtBlockHeight",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "lastSealBlockHeight",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "votes",
+						"type": "uint256"
+					},
+					{
+						"internalType": "enum IBlacklistManager.BlacklistStatus",
+						"name": "status",
+						"type": "uint8"
+					}
+				],
+				"internalType": "struct IBlacklistManager.BlacklistEntry",
+				"name": "entry",
+				"type": "tuple"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "bytes",
+				"name": "dposPublicKey",
+				"type": "bytes"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "votes",
+				"type": "uint256"
+			}
+		],
+		"name": "BlacklistConfirmed",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "bytes",
+				"name": "dposPublicKey",
+				"type": "bytes"
+			}
+		],
+		"name": "BlacklistRemoved",
+		"type": "event"
 	}
 ]`
 
 var blacklistABI abi.ABI
+
+type BlacklistStatus uint8
+
+const (
+	BlacklistStatusNone BlacklistStatus = iota
+	BlacklistStatusPending
+	BlacklistStatusConfirmed
+	BlacklistStatusExpired
+)
+
+type BlacklistEntry struct {
+	DposPublicKey       []byte   `abi:"dposPublicKey"`
+	StartedAtHeight     *big.Int `abi:"startedAtHeight"`
+	AddedAtBlockHeight  *big.Int `abi:"addedAtBlockHeight"`
+	LastSealBlockHeight *big.Int `abi:"lastSealBlockHeight"`
+	Votes               *big.Int `abi:"votes"`
+	Status              uint8    `abi:"status"`
+}
 
 func init() {
 	parsed, err := abi.JSON(strings.NewReader(blacklistABIMetaData))
@@ -240,6 +365,11 @@ func SendRemoveBlacklistVote(contract string, dposPublicKey []byte, lastSealBloc
 	if gasLimit == 0 {
 		return common.Hash{}, errors.New("remove blacklist vote EstimateGas is 0")
 	}
+	price, err := client.SuggestGasPrice(context.Background())
+	if err != nil {
+		log.Error("Remove blacklist vote SuggestGasPrice failed", "error", err)
+		return common.Hash{}, err
+	}
 	pendingNonce, err := client.PendingNonceAt(context.Background(), from)
 	if err != nil {
 		return common.Hash{}, err
@@ -249,13 +379,13 @@ func SendRemoveBlacklistVote(contract string, dposPublicKey []byte, lastSealBloc
 		To:       &contractAddr,
 		Gas:      gasLimit,
 		Data:     inputData,
-		GasPrice: big.NewInt(0),
+		GasPrice: price,
 		Nonce:    pendingNonce,
 	}
 	return client.SendPublicTransaction(context.Background(), callmsg)
 }
 
-// GetBlacklistVoteNonce returns the current vote nonce for a voter public key.
+// GetBlacklistVoteNonce returns the vote nonce for a voter public key from the pending state.
 func GetBlacklistVoteNonce(contract string, voterPublicKey []byte) (*big.Int, error) {
 	client := spv.GetIPCClient()
 	if client == nil {
@@ -273,7 +403,7 @@ func GetBlacklistVoteNonce(contract string, voterPublicKey []byte) (*big.Int, er
 	}
 	contractAddr := common.HexToAddress(contract)
 	msg := ethereum.CallMsg{From: common.Address{}, To: &contractAddr, Data: inputData}
-	out, err := client.CallContract(context.Background(), msg, nil)
+	out, err := client.PendingCallContract(context.Background(), msg)
 	if err != nil {
 		return nil, err
 	}
@@ -327,8 +457,8 @@ func IsBlacklisted(contract string, dposPublicKey []byte) (bool, error) {
 	return blacklisted, nil
 }
 
-// HasVoted checks whether voterPublicKey already voted for dposPublicKey.
-func HasVoted(contract string, dposPublicKey []byte, voterPublicKey []byte) (bool, error) {
+// HasAddVoted checks whether voterPublicKey already submitted an add vote for dposPublicKey.
+func HasAddVoted(contract string, dposPublicKey []byte, voterPublicKey []byte) (bool, error) {
 	client := spv.GetIPCClient()
 	if client == nil {
 		return false, errors.New("spv ipc client is nil")
@@ -339,7 +469,7 @@ func HasVoted(contract string, dposPublicKey []byte, voterPublicKey []byte) (boo
 	if len(dposPublicKey) == 0 || len(voterPublicKey) == 0 {
 		return false, errors.New("invalid hasVoted parameters")
 	}
-	inputData, err := blacklistABI.Pack("hasVoted", dposPublicKey, voterPublicKey)
+	inputData, err := blacklistABI.Pack("hasAddVoted", dposPublicKey, voterPublicKey)
 	if err != nil {
 		return false, err
 	}
@@ -349,18 +479,94 @@ func HasVoted(contract string, dposPublicKey []byte, voterPublicKey []byte) (boo
 	if err != nil {
 		return false, err
 	}
-	values, err := blacklistABI.Unpack("hasVoted", out)
+	values, err := blacklistABI.Unpack("hasAddVoted", out)
 	if err != nil {
 		return false, err
 	}
 	if len(values) != 1 {
-		return false, errors.New("invalid hasVoted response")
+		return false, errors.New("invalid hasAddVoted response")
 	}
 	voted, ok := values[0].(bool)
 	if !ok {
-		return false, errors.New("invalid hasVoted type")
+		return false, errors.New("invalid hasAddVoted type")
 	}
 	return voted, nil
+}
+
+// HasRemoveVoted checks whether voterPublicKey already submitted a remove vote for dposPublicKey.
+func HasRemoveVoted(contract string, dposPublicKey []byte, voterPublicKey []byte) (bool, error) {
+	client := spv.GetIPCClient()
+	if client == nil {
+		return false, errors.New("spv ipc client is nil")
+	}
+	if !common.IsHexAddress(contract) {
+		return false, errors.New("invalid blacklist contract address")
+	}
+	if len(dposPublicKey) == 0 || len(voterPublicKey) == 0 {
+		return false, errors.New("invalid hasRemoveVoted parameters")
+	}
+	inputData, err := blacklistABI.Pack("hasRemoveVoted", dposPublicKey, voterPublicKey)
+	if err != nil {
+		return false, err
+	}
+	contractAddr := common.HexToAddress(contract)
+	msg := ethereum.CallMsg{From: common.Address{}, To: &contractAddr, Data: inputData}
+	out, err := client.CallContract(context.Background(), msg, nil)
+	if err != nil {
+		return false, err
+	}
+	values, err := blacklistABI.Unpack("hasRemoveVoted", out)
+	if err != nil {
+		return false, err
+	}
+	if len(values) != 1 {
+		return false, errors.New("invalid hasRemoveVoted response")
+	}
+	voted, ok := values[0].(bool)
+	if !ok {
+		return false, errors.New("invalid hasRemoveVoted type")
+	}
+	return voted, nil
+}
+
+// GetBlacklistEntry returns the full blacklist entry from the contract.
+func GetBlacklistEntry(contract string, dposPublicKey []byte) (*BlacklistEntry, error) {
+	client := spv.GetIPCClient()
+	if client == nil {
+		return nil, errors.New("spv ipc client is nil")
+	}
+	if !common.IsHexAddress(contract) {
+		return nil, errors.New("invalid blacklist contract address")
+	}
+	if len(dposPublicKey) == 0 {
+		return nil, errors.New("dpos public key is empty")
+	}
+	inputData, err := blacklistABI.Pack("getBlacklistEntry", dposPublicKey)
+	if err != nil {
+		return nil, err
+	}
+	contractAddr := common.HexToAddress(contract)
+	msg := ethereum.CallMsg{From: common.Address{}, To: &contractAddr, Data: inputData}
+	out, err := client.CallContract(context.Background(), msg, nil)
+	if err != nil {
+		return nil, err
+	}
+	var result struct {
+		Entry BlacklistEntry `abi:"entry"`
+	}
+	if err := blacklistABI.UnpackIntoInterface(&result, "getBlacklistEntry", out); err != nil {
+		return nil, err
+	}
+	return &result.Entry, nil
+}
+
+// IsBlacklistExpired returns whether the blacklist entry is currently expired.
+func IsBlacklistExpired(contract string, dposPublicKey []byte) (bool, error) {
+	entry, err := GetBlacklistEntry(contract, dposPublicKey)
+	if err != nil {
+		return false, err
+	}
+	return BlacklistStatus(entry.Status) == BlacklistStatusExpired, nil
 }
 
 // GetChainID returns the chain id from the ipc client.
@@ -374,7 +580,7 @@ func GetChainID() (*big.Int, error) {
 
 func precheckContractCall(client *ethclient.Client, from common.Address, contractAddr common.Address, inputData []byte) error {
 	msg := ethereum.CallMsg{From: from, To: &contractAddr, Data: inputData}
-	_, err := client.CallContract(context.Background(), msg, nil)
+	_, err := client.PendingCallContract(context.Background(), msg)
 	if err != nil {
 		log.Warn("Blacklist vote precheck failed", "error", err)
 		return err
