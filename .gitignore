@@ -53,3 +53,6 @@ go.sum
 oracle/node_modules/
 oracle/package-lock.json
 oracle/package.json
+.gocache/
+BlacklistManager.sol
+IBlacklistManager.sol

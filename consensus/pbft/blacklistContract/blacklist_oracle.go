@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/big"
+	"sync"
 
 	"github.com/pgprotocol/pgp-chain/common"
 	"github.com/pgprotocol/pgp-chain/log"
@@ -15,6 +16,9 @@ type ContractBlacklistOracle struct {
 	contract    string
 	voterPubKey []byte
 	signer      func([]byte) []byte
+	voteMu      sync.Mutex
+	listenerMu  sync.Mutex
+	listener    *BlacklistEventListener
 }
 
 // NewContractBlacklistOracle creates a blacklist oracle for the blacklist contract.
@@ -44,6 +48,8 @@ func (o *ContractBlacklistOracle) SubmitBlacklistVote(producerKey string, lastSe
 	if len(targetPubKey) == 0 {
 		return fmt.Errorf("invalid producer public key: %s", producerKey)
 	}
+	o.voteMu.Lock()
+	defer o.voteMu.Unlock()
 	chainID, err := GetChainID()
 	if err != nil {
 		return err
@@ -87,6 +93,8 @@ func (o *ContractBlacklistOracle) RemoveBlacklistVote(producerKey string, lastSe
 	if len(targetPubKey) == 0 {
 		return fmt.Errorf("invalid producer public key: %s", producerKey)
 	}
+	o.voteMu.Lock()
+	defer o.voteMu.Unlock()
 	blacklisted, err := IsBlacklisted(o.contract, targetPubKey)
 	if err != nil {
 		return err
@@ -127,12 +135,61 @@ func (o *ContractBlacklistOracle) IsBlacklisted(dposPublicKey []byte) (bool, err
 	return IsBlacklisted(o.contract, dposPublicKey)
 }
 
-// HasVoted checks whether current voter public key already voted for dposPublicKey.
-func (o *ContractBlacklistOracle) HasVoted(dposPublicKey []byte) (bool, error) {
+// HasAddVoted checks whether current voter public key already submitted an add vote.
+func (o *ContractBlacklistOracle) HasAddVoted(dposPublicKey []byte) (bool, error) {
 	if o == nil || o.contract == "" {
 		return false, nil
 	}
-	return HasVoted(o.contract, dposPublicKey, o.voterPubKey)
+	return HasAddVoted(o.contract, dposPublicKey, o.voterPubKey)
+}
+
+// HasRemoveVoted checks whether current voter public key already submitted a remove vote.
+func (o *ContractBlacklistOracle) HasRemoveVoted(dposPublicKey []byte) (bool, error) {
+	if o == nil || o.contract == "" {
+		return false, nil
+	}
+	return HasRemoveVoted(o.contract, dposPublicKey, o.voterPubKey)
+}
+
+// IsExpired checks whether a blacklist entry is expired in the contract view.
+func (o *ContractBlacklistOracle) IsExpired(dposPublicKey []byte) (bool, error) {
+	if o == nil || o.contract == "" {
+		return false, nil
+	}
+	return IsBlacklistExpired(o.contract, dposPublicKey)
+}
+
+// StartListener subscribes to blacklist contract events.
+func (o *ContractBlacklistOracle) StartListener(onConfirmed func([]byte), onRemoved func([]byte), getScannedHeight func() uint64, setScannedHeight func(uint64)) error {
+	if o == nil || o.contract == "" {
+		return nil
+	}
+	o.listenerMu.Lock()
+	defer o.listenerMu.Unlock()
+
+	if o.listener != nil {
+		o.listener.Stop()
+	}
+	listener := NewBlacklistEventListener(o.contract, onConfirmed, onRemoved, getScannedHeight, setScannedHeight)
+	if err := listener.Start(); err != nil {
+		return err
+	}
+	o.listener = listener
+	return nil
+}
+
+// StopListener stops the blacklist contract event subscription.
+func (o *ContractBlacklistOracle) StopListener() {
+	if o == nil {
+		return
+	}
+	o.listenerMu.Lock()
+	defer o.listenerMu.Unlock()
+
+	if o.listener != nil {
+		o.listener.Stop()
+		o.listener = nil
+	}
 }
 
 func buildBlacklistVoteMessage(contractAddr common.Address, chainID *big.Int, dposPublicKey []byte, lastSealBlockHeight uint64, nonce *big.Int) []byte {

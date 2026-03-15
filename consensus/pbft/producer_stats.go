@@ -27,11 +27,9 @@ const (
 	// InactiveThreshold is the number of consecutive blocks a producer must miss to be marked as inactive
 	InactiveThreshold uint64 = 20
 	// producerStatsDBName is the database name for storing producer statistics
-	producerStatsDBName = "producer_stats"
-	// CleanupIntervalBlocks is the number of blocks between cleanup operations
-	CleanupIntervalBlocks uint64 = 10000
-	// BlacklistRemovalAfter defines when to start submitting remove blacklist votes
-	BlacklistRemovalAfter = 10 * time.Minute // 7 * 24 * time.Hour
+	producerStatsDBName    = "producer_stats"
+	blacklistDBPrefix      = "blacklist:"
+	blacklistScanHeightKey = "blacklistScanHeight"
 )
 
 // dbInterface combines the interfaces we need for persistence
@@ -44,17 +42,22 @@ type dbInterface interface {
 // ProducerStats tracks the participation statistics for each producer
 type ProducerStats struct {
 	mu                       sync.RWMutex
-	db                       dbInterface       // Database for persistence
-	dataDir                  string            // Data directory path
-	lastParticipationTime    map[string]uint64 // key: producer public key (hex), value: last participation time (unix seconds)
-	participationCount       map[string]uint64 // key: producer public key (hex), value: participation count
-	lastBlockHeight          map[string]uint64 // key: producer public key (hex), value: last block height
-	consecutiveMissedBlocks  map[string]uint64 // key: producer public key (hex), value: consecutive missed blocks
-	currentBlockHeight       uint64            // current block height for tracking
-	lastProcessedBlockHeight uint64            // last processed block height to avoid duplicate processing
-	lastCleanupBlockHeight   uint64            // last block height when cleanup was performed
-	currentBlockTime         time.Time         // last seen block time (from chain)
+	db                       dbInterface         // Database for persistence
+	dataDir                  string              // Data directory path
+	lastParticipationTime    map[string]uint64   // key: producer public key (hex), value: last participation time (unix seconds)
+	lastBlockHeight          map[string]uint64   // key: producer public key (hex), value: last block height
+	consecutiveMissedBlocks  map[string]uint64   // key: producer public key (hex), value: consecutive missed blocks
+	confirmedBlacklist       map[string]struct{} // key: producer public key (hex)
+	blacklistScannedHeight   uint64
+	lastProcessedBlockHeight uint64    // last processed block height to avoid duplicate processing
+	currentBlockTime         time.Time // last seen block time (from chain)
 	blacklistOracle          BlacklistOracle
+}
+
+type blacklistVoteTarget struct {
+	producerKey    string
+	lastSealHeight uint64
+	currentHeight  uint64
 }
 
 // NewProducerStats creates a new ProducerStats instance
@@ -63,12 +66,10 @@ func NewProducerStats(dataDir string) (*ProducerStats, error) {
 	ps := &ProducerStats{
 		dataDir:                  dataDir,
 		lastParticipationTime:    make(map[string]uint64),
-		participationCount:       make(map[string]uint64),
 		lastBlockHeight:          make(map[string]uint64),
 		consecutiveMissedBlocks:  make(map[string]uint64),
-		currentBlockHeight:       0,
+		confirmedBlacklist:       make(map[string]struct{}),
 		lastProcessedBlockHeight: 0,
-		lastCleanupBlockHeight:   0,
 	}
 
 	// Open database for persistence
@@ -94,12 +95,29 @@ func NewProducerStats(dataDir string) (*ProducerStats, error) {
 // ConfigureBlacklist sets the oracle used for blacklist votes.
 func (ps *ProducerStats) ConfigureBlacklist(oracle BlacklistOracle) {
 	ps.mu.Lock()
-	defer ps.mu.Unlock()
+	oldOracle := ps.blacklistOracle
 	ps.blacklistOracle = oracle
+	ps.mu.Unlock()
+
+	if oldOracle != nil {
+		oldOracle.StopListener()
+	}
+	if oracle != nil {
+		if err := oracle.StartListener(ps.onBlacklistConfirmed, ps.onBlacklistRemoved, ps.getBlacklistScannedHeight, ps.setBlacklistScannedHeight); err != nil {
+			log.Error("Failed to start blacklist listener", "error", err)
+		}
+	}
 }
 
 // Close closes the database connection
 func (ps *ProducerStats) Close() error {
+	ps.mu.Lock()
+	oracle := ps.blacklistOracle
+	ps.blacklistOracle = nil
+	ps.mu.Unlock()
+	if oracle != nil {
+		oracle.StopListener()
+	}
 	if ps.db != nil {
 		if closer, ok := ps.db.(interface{ Close() error }); ok {
 			return closer.Close()
@@ -113,18 +131,15 @@ func (ps *ProducerStats) RecordParticipation(producerPubKey []byte, blockHeight 
 	if len(producerPubKey) == 0 {
 		return
 	}
-
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
 	producerKey := common.Bytes2Hex(producerPubKey)
-	participationTime := blockTime
-	if participationTime == 0 {
-		participationTime = uint64(time.Now().Unix())
-	}
 
+	if ps.lastBlockHeight[producerKey] == blockHeight {
+		return
+	}
 	ps.lastParticipationTime[producerKey] = blockTime
-	ps.participationCount[producerKey]++
 	ps.lastBlockHeight[producerKey] = blockHeight
 
 	// Reset consecutive missed blocks when producer participates
@@ -133,8 +148,7 @@ func (ps *ProducerStats) RecordParticipation(producerPubKey []byte, blockHeight 
 	log.Info("Record producer participation",
 		"producer", producerKey,
 		"height", blockHeight,
-		"time", time.Unix(int64(participationTime), 0),
-		"count", ps.participationCount[producerKey])
+		"time", time.Unix(int64(blockTime), 0))
 
 	// Save to database
 	ps.saveProducerToDB(producerKey)
@@ -154,16 +168,16 @@ type ParticipationInfo struct {
 // This should be called when a new block is inserted, with the list of current producers
 // blockTime is seconds since epoch from the block header
 func (ps *ProducerStats) UpdateBlockHeight(blockHeight uint64, blockTime uint64, currentProducers [][]byte) {
+	var addTargets []blacklistVoteTarget
 	ps.mu.Lock()
-	defer ps.mu.Unlock()
 
 	// Avoid processing the same block height multiple times
 	if blockHeight <= ps.lastProcessedBlockHeight {
+		ps.mu.Unlock()
 		return
 	}
 	log.Info("------------ >>>>>>> UpdateBlockHeight", "blockHeight ", blockHeight, "blockTime:", blockTime)
 	// Update current block height
-	ps.currentBlockHeight = blockHeight
 	ps.lastProcessedBlockHeight = blockHeight
 	ps.currentBlockTime = time.Unix(int64(blockTime), 0)
 
@@ -173,11 +187,16 @@ func (ps *ProducerStats) UpdateBlockHeight(blockHeight uint64, blockTime uint64,
 		producerKey := common.Bytes2Hex(producer)
 		fmt.Println("producerKey ", producerKey)
 		producerSet[producerKey] = true
+		if _, exists := ps.lastParticipationTime[producerKey]; !exists {
+			// New producer, initialize with 0 missed blocks
+			log.Info(" is New producer, set missed block to 0", " producerKey ", producerKey)
+			ps.consecutiveMissedBlocks[producerKey] = 0
+			ps.lastParticipationTime[producerKey] = 0
+		}
 	}
 
 	// Update consecutive missed blocks for all known producers
 	// Only track producers that are in the current producer list
-	needsSave := false
 	for producerKey := range ps.lastParticipationTime {
 		// Only track if this producer is in the current producer list
 		if !producerSet[producerKey] {
@@ -187,38 +206,30 @@ func (ps *ProducerStats) UpdateBlockHeight(blockHeight uint64, blockTime uint64,
 
 		// Check if this producer participated in the last block
 		// If lastBlockHeight is less than current block height, they missed this block
-		if ps.lastBlockHeight[producerKey] < blockHeight {
-			ps.consecutiveMissedBlocks[producerKey]++
-			log.Info("Missed Blocks ", "producer:", producerKey, "count:", ps.consecutiveMissedBlocks[producerKey], " InactiveThreshold:", InactiveThreshold)
-			// Check if should be marked as inactive
-			if ps.consecutiveMissedBlocks[producerKey] >= InactiveThreshold {
-				// Add to blacklist (permanent record)
-				ps.addToBlacklist(producerKey, blockHeight, blockTime)
-				log.Warn("Producer marked as inactive and added to blacklist (cannot participate in consensus)",
-					"producer", producerKey,
-					"consecutiveMissedBlocks", ps.consecutiveMissedBlocks[producerKey],
-					"height", blockHeight)
+		if lastHeight, exists := ps.lastBlockHeight[producerKey]; exists {
+			if lastHeight > 0 && lastHeight < blockHeight {
+				ps.consecutiveMissedBlocks[producerKey]++
+				log.Info("Missed Blocks ", "producer:", producerKey, "count:", ps.consecutiveMissedBlocks[producerKey], " InactiveThreshold:", InactiveThreshold)
+				// Check if should be marked as inactive
+				if ps.consecutiveMissedBlocks[producerKey] >= InactiveThreshold {
+					addTargets = append(addTargets, blacklistVoteTarget{
+						producerKey:    producerKey,
+						lastSealHeight: lastHeight,
+						currentHeight:  blockHeight,
+					})
+					log.Warn("Producer marked as inactive and added to blacklist (cannot participate in consensus)",
+						"producer", producerKey,
+						"consecutiveMissedBlocks", ps.consecutiveMissedBlocks[producerKey],
+						"height", blockHeight)
+				}
+				ps.saveProducerToDB(producerKey)
 			}
-			needsSave = true
-			ps.saveProducerToDB(producerKey)
 		}
-	}
 
-	ps.trySubmitRemoveBlacklistVotes(blockTime)
-
-	// Also initialize tracking for new producers in the current list
-	for _, producer := range currentProducers {
-		producerKey := common.Bytes2Hex(producer)
-		if _, exists := ps.lastParticipationTime[producerKey]; !exists {
-			// New producer, initialize with 0 missed blocks
-			log.Info(" is New producer, set missed block to 0", " producerKey ", producerKey)
-			ps.consecutiveMissedBlocks[producerKey] = 1
-			ps.lastParticipationTime[producerKey] = blockTime
-		}
 	}
 
 	// Save current block height
-	if needsSave && ps.db != nil {
+	if ps.db != nil {
 		key := []byte("currentBlockHeight")
 		value := make([]byte, 8)
 		binary.BigEndian.PutUint64(value, blockHeight)
@@ -226,6 +237,12 @@ func (ps *ProducerStats) UpdateBlockHeight(blockHeight uint64, blockTime uint64,
 			log.Error("Failed to save current block height", "error", err)
 		}
 	}
+	ps.mu.Unlock()
+
+	for _, target := range addTargets {
+		ps.addToBlacklist(target.producerKey, target.lastSealHeight, target.currentHeight)
+	}
+	ps.trySubmitRemoveBlacklistVotes()
 }
 
 // GetConsecutiveMissedBlocks returns the number of consecutive blocks a producer has missed
@@ -242,15 +259,19 @@ func (ps *ProducerStats) GetConsecutiveMissedBlocks(producerPubKey []byte) uint6
 }
 
 // addToBlacklist adds a producer to the blacklist
-func (ps *ProducerStats) addToBlacklist(producerKey string, _ uint64, _ uint64) {
+func (ps *ProducerStats) addToBlacklist(producerKey string, lastSealHeight uint64, currentHeight uint64) {
 	// Submit blacklist vote to contract (best-effort)
-	lastSealHeight := ps.lastBlockHeight[producerKey]
 	if err := ps.submitBlacklistVote(producerKey, lastSealHeight); err != nil {
 		log.Error("Submit blacklist vote failed",
 			"producer", producerKey,
 			"lastSealHeight", lastSealHeight,
 			"error", err)
+		return
 	}
+	log.Warn("Producer marked as inactive and submitted blacklist vote",
+		"producer", producerKey,
+		"lastSealHeight", lastSealHeight,
+		"height", currentHeight)
 }
 
 func (ps *ProducerStats) submitBlacklistVote(producerKey string, lastSealBlockHeight uint64) error {
@@ -258,11 +279,17 @@ func (ps *ProducerStats) submitBlacklistVote(producerKey string, lastSealBlockHe
 		return nil
 	}
 	targetPubKey := common.Hex2Bytes(producerKey)
-	if voted, err := ps.blacklistOracle.HasVoted(targetPubKey); voted || err != nil {
+	if voted, err := ps.blacklistOracle.HasAddVoted(targetPubKey); voted || err != nil {
 		if err != nil {
 			return err
 		}
-		return fmt.Errorf("already voted for : %s", producerKey)
+		return fmt.Errorf("already submitted add vote for: %s", producerKey)
+	}
+	if expired, err := ps.blacklistOracle.IsExpired(targetPubKey); expired || err != nil {
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("blacklist expired for: %s", producerKey)
 	}
 	if res, err := ps.blacklistOracle.IsBlacklisted(targetPubKey); res == true || err != nil {
 		if err != nil {
@@ -273,47 +300,72 @@ func (ps *ProducerStats) submitBlacklistVote(producerKey string, lastSealBlockHe
 	return ps.blacklistOracle.SubmitBlacklistVote(producerKey, lastSealBlockHeight)
 }
 
-func (ps *ProducerStats) trySubmitRemoveBlacklistVotes(blockTime uint64) {
+func (ps *ProducerStats) trySubmitRemoveBlacklistVotes() {
 	if ps.blacklistOracle == nil {
 		return
 	}
-	now := time.Unix(int64(blockTime), 0)
-	for producerKey := range ps.lastParticipationTime {
-		lastTimeSec := ps.lastParticipationTime[producerKey]
-		if lastTimeSec == 0 {
-			continue
-		}
-		lastTime := time.Unix(int64(lastTimeSec), 0)
-		if now.Sub(lastTime) < BlacklistRemovalAfter {
-			continue
-		}
+	for _, target := range ps.snapshotRemoveVoteTargets() {
+		producerKey := target.producerKey
 		targetPubKey := common.Hex2Bytes(producerKey)
-		isBlacklisted, err := ps.blacklistOracle.IsBlacklisted(targetPubKey)
+		expired, err := ps.blacklistOracle.IsExpired(targetPubKey)
 		if err != nil {
-			log.Error("Query blacklist status failed", "producer", producerKey, "error", err)
+			log.Error("Query blacklist expired status failed", "producer", producerKey, "error", err)
 			continue
 		}
-		if !isBlacklisted {
+		if !expired {
+			isBlacklisted, err := ps.blacklistOracle.IsBlacklisted(targetPubKey)
+			if err != nil {
+				log.Error("Query blacklist status failed", "producer", producerKey, "error", err)
+				continue
+			}
+			if !isBlacklisted {
+				ps.onBlacklistRemoved(targetPubKey)
+			}
 			continue
 		}
-		voted, err := ps.blacklistOracle.HasVoted(targetPubKey)
+		removeVoted, err := ps.blacklistOracle.HasRemoveVoted(targetPubKey)
 		if err != nil {
-			log.Error("Query hasVoted failed", "producer", producerKey, "error", err)
+			log.Error("Query hasRemoveVoted failed", "producer", producerKey, "error", err)
 			continue
 		}
-		if voted {
+		if removeVoted {
 			continue
 		}
-		lastSealHeight := ps.lastBlockHeight[producerKey]
-		if err := ps.blacklistOracle.RemoveBlacklistVote(producerKey, lastSealHeight); err != nil {
+		if err := ps.blacklistOracle.RemoveBlacklistVote(producerKey, target.lastSealHeight); err != nil {
 			log.Error("Submit remove blacklist vote failed",
 				"producer", producerKey,
-				"lastSealHeight", lastSealHeight,
+				"lastSealHeight", target.lastSealHeight,
 				"error", err)
 			continue
 		}
-		ps.saveProducerToDB(producerKey)
 	}
+}
+
+func (ps *ProducerStats) onBlacklistConfirmed(dposPublicKey []byte) {
+	if len(dposPublicKey) == 0 {
+		return
+	}
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+
+	producerKey := common.Bytes2Hex(dposPublicKey)
+	if _, exists := ps.confirmedBlacklist[producerKey]; exists {
+		return
+	}
+	ps.confirmedBlacklist[producerKey] = struct{}{}
+	ps.saveConfirmedBlacklistToDB(producerKey)
+	log.Info("Producer confirmed in blacklist", "producer", producerKey)
+}
+
+func (ps *ProducerStats) onBlacklistRemoved(dposPublicKey []byte) {
+	if len(dposPublicKey) == 0 {
+		return
+	}
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+
+	producerKey := common.Bytes2Hex(dposPublicKey)
+	ps.deleteConfirmedBlacklist(producerKey)
 }
 
 func (ps *ProducerStats) getNow() time.Time {
@@ -339,10 +391,8 @@ func (ps *ProducerStats) saveProducerToDB(producerKey string) {
 	if ps.db == nil {
 		return
 	}
-	fmt.Println("save ProducerToDB>>> ", producerKey)
 	data := ProducerStatsData{
 		LastParticipationTime:   int64(ps.lastParticipationTime[producerKey]),
-		ParticipationCount:      ps.participationCount[producerKey],
 		LastBlockHeight:         ps.lastBlockHeight[producerKey],
 		ConsecutiveMissedBlocks: ps.consecutiveMissedBlocks[producerKey],
 	}
@@ -368,10 +418,10 @@ func (ps *ProducerStats) loadFromDB() error {
 	// Load current block height
 	key := []byte("currentBlockHeight")
 	if value, err := ps.db.Get(key); err == nil && len(value) == 8 {
-		ps.currentBlockHeight = binary.BigEndian.Uint64(value)
-		ps.lastProcessedBlockHeight = ps.currentBlockHeight
-		// Initialize lastCleanupBlockHeight to current height to avoid immediate cleanup
-		ps.lastCleanupBlockHeight = ps.currentBlockHeight
+		ps.lastProcessedBlockHeight = binary.BigEndian.Uint64(value)
+	}
+	if value, err := ps.db.Get([]byte(blacklistScanHeightKey)); err == nil && len(value) == 8 {
+		ps.blacklistScannedHeight = binary.BigEndian.Uint64(value)
 	}
 
 	// Iterate through all keys with prefix "producer:"
@@ -398,7 +448,6 @@ func (ps *ProducerStats) loadFromDB() error {
 
 		// Restore producer statistics
 		ps.lastParticipationTime[producerKey] = uint64(data.LastParticipationTime)
-		ps.participationCount[producerKey] = data.ParticipationCount
 		ps.lastBlockHeight[producerKey] = data.LastBlockHeight
 		ps.consecutiveMissedBlocks[producerKey] = data.ConsecutiveMissedBlocks
 
@@ -407,8 +456,82 @@ func (ps *ProducerStats) loadFromDB() error {
 
 	log.Info("Loaded producer statistics from database",
 		"producerCount", count,
-		"currentBlockHeight", ps.currentBlockHeight)
+		"currentBlockHeight", ps.lastProcessedBlockHeight)
+
+	blacklistPrefix := []byte(blacklistDBPrefix)
+	blacklistIt := ps.db.NewIteratorWithPrefix(blacklistPrefix)
+	defer blacklistIt.Release()
+	for blacklistIt.Next() {
+		key := blacklistIt.Key()
+		if len(key) <= len(blacklistPrefix) {
+			continue
+		}
+		producerKey := string(key[len(blacklistPrefix):])
+		ps.confirmedBlacklist[producerKey] = struct{}{}
+	}
+	if err := blacklistIt.Error(); err != nil {
+		return err
+	}
 	return it.Error()
+}
+
+func (ps *ProducerStats) saveConfirmedBlacklistToDB(producerKey string) {
+	if ps.db == nil {
+		return
+	}
+	if err := ps.db.Put([]byte(blacklistDBPrefix+producerKey), []byte{1}); err != nil {
+		log.Error("Failed to save confirmed blacklist", "producer", producerKey, "error", err)
+	}
+}
+
+func (ps *ProducerStats) deleteConfirmedBlacklist(producerKey string) {
+	if _, exists := ps.confirmedBlacklist[producerKey]; !exists {
+		return
+	}
+	delete(ps.confirmedBlacklist, producerKey)
+	if ps.db == nil {
+		return
+	}
+	if err := ps.db.Delete([]byte(blacklistDBPrefix + producerKey)); err != nil {
+		log.Error("Failed to delete confirmed blacklist", "producer", producerKey, "error", err)
+	}
+}
+
+func (ps *ProducerStats) snapshotRemoveVoteTargets() []blacklistVoteTarget {
+	ps.mu.RLock()
+	defer ps.mu.RUnlock()
+
+	targets := make([]blacklistVoteTarget, 0, len(ps.confirmedBlacklist))
+	for producerKey := range ps.confirmedBlacklist {
+		targets = append(targets, blacklistVoteTarget{
+			producerKey:    producerKey,
+			lastSealHeight: ps.lastBlockHeight[producerKey],
+		})
+	}
+	return targets
+}
+
+func (ps *ProducerStats) getBlacklistScannedHeight() uint64 {
+	ps.mu.RLock()
+	defer ps.mu.RUnlock()
+	return ps.blacklistScannedHeight
+}
+
+func (ps *ProducerStats) setBlacklistScannedHeight(height uint64) {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	if height <= ps.blacklistScannedHeight {
+		return
+	}
+	ps.blacklistScannedHeight = height
+	if ps.db == nil {
+		return
+	}
+	value := make([]byte, 8)
+	binary.BigEndian.PutUint64(value, height)
+	if err := ps.db.Put([]byte(blacklistScanHeightKey), value); err != nil {
+		log.Error("Failed to save blacklist scanned height", "height", height, "error", err)
+	}
 }
 
 // extractProducerFromBlock extracts the producer public key from a block's confirm
