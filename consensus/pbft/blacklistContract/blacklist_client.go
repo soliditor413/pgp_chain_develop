@@ -14,6 +14,10 @@ import (
 	"github.com/pgprotocol/pgp-chain/spv"
 )
 
+const (
+	blacklistVoteFallbackGasLimit uint64 = 500000
+)
+
 const blacklistABIMetaData = `[
 	{
 		"inputs": [
@@ -51,12 +55,6 @@ const blacklistABIMetaData = `[
 				"type": "bytes"
 			},
 			{
-				"internalType": "uint64",
-				"name": "lastSealBlockHeight",
-				"type": "uint64"
-			},
-			{
-				"internalType": "bytes",
 				"name": "voterPublicKey",
 				"type": "bytes"
 			},
@@ -79,7 +77,26 @@ const blacklistABIMetaData = `[
 				"type": "bytes"
 			}
 		],
-		"name": "getVoteNonce",
+		"name": "getAddVoteNonce",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "nonce",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes",
+				"name": "voterPublicKey",
+				"type": "bytes"
+			}
+		],
+		"name": "getRemoveVoteNonce",
 		"outputs": [
 			{
 				"internalType": "uint256",
@@ -300,7 +317,7 @@ func SendBlacklistVote(contract string, dposPublicKey []byte, lastSealBlockHeigh
 		return common.Hash{}, err
 	}
 	msg := ethereum.CallMsg{From: from, To: &contractAddr, Data: inputData}
-	gasLimit, err := client.EstimateGas(context.Background(), msg)
+	gasLimit, err := estimateBlacklistVoteGas(client, msg)
 	if err != nil {
 		log.Error("Blacklist vote EstimateGas failed", "error", err)
 		return common.Hash{}, err
@@ -329,7 +346,7 @@ func SendBlacklistVote(contract string, dposPublicKey []byte, lastSealBlockHeigh
 }
 
 // SendRemoveBlacklistVote submits a blacklist removal vote transaction.
-func SendRemoveBlacklistVote(contract string, dposPublicKey []byte, lastSealBlockHeight uint64, voterPublicKey []byte, signature []byte) (common.Hash, error) {
+func SendRemoveBlacklistVote(contract string, dposPublicKey []byte, voterPublicKey []byte, signature []byte) (common.Hash, error) {
 	client := spv.GetIPCClient()
 	if client == nil {
 		return common.Hash{}, errors.New("spv ipc client is nil")
@@ -348,7 +365,7 @@ func SendRemoveBlacklistVote(contract string, dposPublicKey []byte, lastSealBloc
 		return common.Hash{}, errors.New("invalid remove blacklist vote parameters")
 	}
 
-	inputData, err := blacklistABI.Pack("removeBlacklistVote", dposPublicKey, lastSealBlockHeight, voterPublicKey, signature)
+	inputData, err := blacklistABI.Pack("removeBlacklistVote", dposPublicKey, voterPublicKey, signature)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -357,7 +374,7 @@ func SendRemoveBlacklistVote(contract string, dposPublicKey []byte, lastSealBloc
 		return common.Hash{}, err
 	}
 	msg := ethereum.CallMsg{From: from, To: &contractAddr, Data: inputData}
-	gasLimit, err := client.EstimateGas(context.Background(), msg)
+	gasLimit, err := estimateBlacklistVoteGas(client, msg)
 	if err != nil {
 		log.Error("Remove blacklist vote EstimateGas failed", "error", err)
 		return common.Hash{}, err
@@ -385,8 +402,8 @@ func SendRemoveBlacklistVote(contract string, dposPublicKey []byte, lastSealBloc
 	return client.SendPublicTransaction(context.Background(), callmsg)
 }
 
-// GetBlacklistVoteNonce returns the vote nonce for a voter public key from the pending state.
-func GetBlacklistVoteNonce(contract string, voterPublicKey []byte) (*big.Int, error) {
+// GetAddBlacklistVoteNonce returns the add-vote nonce for a voter public key from the pending state.
+func GetAddBlacklistVoteNonce(contract string, voterPublicKey []byte) (*big.Int, error) {
 	client := spv.GetIPCClient()
 	if client == nil {
 		return nil, errors.New("spv ipc client is nil")
@@ -397,7 +414,7 @@ func GetBlacklistVoteNonce(contract string, voterPublicKey []byte) (*big.Int, er
 	if len(voterPublicKey) == 0 {
 		return nil, errors.New("voter public key is empty")
 	}
-	inputData, err := blacklistABI.Pack("getVoteNonce", voterPublicKey)
+	inputData, err := blacklistABI.Pack("getAddVoteNonce", voterPublicKey)
 	if err != nil {
 		return nil, err
 	}
@@ -407,16 +424,52 @@ func GetBlacklistVoteNonce(contract string, voterPublicKey []byte) (*big.Int, er
 	if err != nil {
 		return nil, err
 	}
-	values, err := blacklistABI.Unpack("getVoteNonce", out)
+	values, err := blacklistABI.Unpack("getAddVoteNonce", out)
 	if err != nil {
 		return nil, err
 	}
 	if len(values) != 1 {
-		return nil, errors.New("invalid getVoteNonce response")
+		return nil, errors.New("invalid getAddVoteNonce response")
 	}
 	nonce, ok := values[0].(*big.Int)
 	if !ok {
-		return nil, errors.New("invalid nonce type")
+		return nil, errors.New("invalid add nonce type")
+	}
+	return nonce, nil
+}
+
+// GetRemoveBlacklistVoteNonce returns the remove-vote nonce for a voter public key from the pending state.
+func GetRemoveBlacklistVoteNonce(contract string, voterPublicKey []byte) (*big.Int, error) {
+	client := spv.GetIPCClient()
+	if client == nil {
+		return nil, errors.New("spv ipc client is nil")
+	}
+	if !common.IsHexAddress(contract) {
+		return nil, errors.New("invalid blacklist contract address")
+	}
+	if len(voterPublicKey) == 0 {
+		return nil, errors.New("voter public key is empty")
+	}
+	inputData, err := blacklistABI.Pack("getRemoveVoteNonce", voterPublicKey)
+	if err != nil {
+		return nil, err
+	}
+	contractAddr := common.HexToAddress(contract)
+	msg := ethereum.CallMsg{From: common.Address{}, To: &contractAddr, Data: inputData}
+	out, err := client.PendingCallContract(context.Background(), msg)
+	if err != nil {
+		return nil, err
+	}
+	values, err := blacklistABI.Unpack("getRemoveVoteNonce", out)
+	if err != nil {
+		return nil, err
+	}
+	if len(values) != 1 {
+		return nil, errors.New("invalid getRemoveVoteNonce response")
+	}
+	nonce, ok := values[0].(*big.Int)
+	if !ok {
+		return nil, errors.New("invalid remove nonce type")
 	}
 	return nonce, nil
 }
@@ -475,7 +528,7 @@ func HasAddVoted(contract string, dposPublicKey []byte, voterPublicKey []byte) (
 	}
 	contractAddr := common.HexToAddress(contract)
 	msg := ethereum.CallMsg{From: common.Address{}, To: &contractAddr, Data: inputData}
-	out, err := client.CallContract(context.Background(), msg, nil)
+	out, err := client.PendingCallContract(context.Background(), msg)
 	if err != nil {
 		return false, err
 	}
@@ -511,7 +564,7 @@ func HasRemoveVoted(contract string, dposPublicKey []byte, voterPublicKey []byte
 	}
 	contractAddr := common.HexToAddress(contract)
 	msg := ethereum.CallMsg{From: common.Address{}, To: &contractAddr, Data: inputData}
-	out, err := client.CallContract(context.Background(), msg, nil)
+	out, err := client.PendingCallContract(context.Background(), msg)
 	if err != nil {
 		return false, err
 	}
@@ -547,7 +600,7 @@ func GetBlacklistEntry(contract string, dposPublicKey []byte) (*BlacklistEntry, 
 	}
 	contractAddr := common.HexToAddress(contract)
 	msg := ethereum.CallMsg{From: common.Address{}, To: &contractAddr, Data: inputData}
-	out, err := client.CallContract(context.Background(), msg, nil)
+	out, err := client.PendingCallContract(context.Background(), msg)
 	if err != nil {
 		return nil, err
 	}
@@ -586,4 +639,12 @@ func precheckContractCall(client *ethclient.Client, from common.Address, contrac
 		return err
 	}
 	return nil
+}
+
+func estimateBlacklistVoteGas(client *ethclient.Client, msg ethereum.CallMsg) (uint64, error) {
+	gasLimit, err := client.EstimateGas(context.Background(), msg)
+	if err == nil {
+		return gasLimit, nil
+	}
+	return 0, err
 }
