@@ -204,14 +204,14 @@ func (ps *ProducerStats) UpdateBlockHeight(blockHeight uint64, blockTime uint64,
 			continue
 		}
 
-		// Check if this producer participated in the last block
-		// If lastBlockHeight is less than current block height, they missed this block
-		if lastHeight, exists := ps.lastBlockHeight[producerKey]; exists {
-			if lastHeight > 0 && lastHeight < blockHeight {
-				ps.consecutiveMissedBlocks[producerKey]++
-				log.Info("Missed Blocks ", "producer:", producerKey, "count:", ps.consecutiveMissedBlocks[producerKey], " InactiveThreshold:", InactiveThreshold)
-				// Check if should be marked as inactive
-				if ps.consecutiveMissedBlocks[producerKey] >= InactiveThreshold {
+		// Check if this producer participated in the last block.
+		// Producers that have never sealed a block keep lastHeight=0 and should still accumulate misses.
+		if lastHeight := ps.lastBlockHeight[producerKey]; lastHeight < blockHeight {
+			ps.consecutiveMissedBlocks[producerKey]++
+			log.Info("Missed Blocks ", "producer:", producerKey, "count:", ps.consecutiveMissedBlocks[producerKey], " InactiveThreshold:", InactiveThreshold)
+			// Check if should be marked as inactive
+			if ps.consecutiveMissedBlocks[producerKey] >= InactiveThreshold {
+				if _, exists := ps.confirmedBlacklist[producerKey]; !exists {
 					addTargets = append(addTargets, blacklistVoteTarget{
 						producerKey:    producerKey,
 						lastSealHeight: lastHeight,
@@ -222,8 +222,8 @@ func (ps *ProducerStats) UpdateBlockHeight(blockHeight uint64, blockTime uint64,
 						"consecutiveMissedBlocks", ps.consecutiveMissedBlocks[producerKey],
 						"height", blockHeight)
 				}
-				ps.saveProducerToDB(producerKey)
 			}
+			ps.saveProducerToDB(producerKey)
 		}
 
 	}
@@ -309,18 +309,10 @@ func (ps *ProducerStats) trySubmitRemoveBlacklistVotes() {
 		targetPubKey := common.Hex2Bytes(producerKey)
 		expired, err := ps.blacklistOracle.IsExpired(targetPubKey)
 		if err != nil {
-			log.Error("Query blacklist expired status failed", "producer", producerKey, "error", err)
+			log.Error("Query blacklist expired status failed", "producer", producerKey, "error ", err)
 			continue
 		}
 		if !expired {
-			isBlacklisted, err := ps.blacklistOracle.IsBlacklisted(targetPubKey)
-			if err != nil {
-				log.Error("Query blacklist status failed", "producer", producerKey, "error", err)
-				continue
-			}
-			if !isBlacklisted {
-				ps.onBlacklistRemoved(targetPubKey)
-			}
 			continue
 		}
 		removeVoted, err := ps.blacklistOracle.HasRemoveVoted(targetPubKey)
@@ -331,10 +323,9 @@ func (ps *ProducerStats) trySubmitRemoveBlacklistVotes() {
 		if removeVoted {
 			continue
 		}
-		if err := ps.blacklistOracle.RemoveBlacklistVote(producerKey, target.lastSealHeight); err != nil {
+		if err := ps.blacklistOracle.RemoveBlacklistVote(producerKey); err != nil {
 			log.Error("Submit remove blacklist vote failed",
 				"producer", producerKey,
-				"lastSealHeight", target.lastSealHeight,
 				"error", err)
 			continue
 		}
@@ -366,6 +357,7 @@ func (ps *ProducerStats) onBlacklistRemoved(dposPublicKey []byte) {
 
 	producerKey := common.Bytes2Hex(dposPublicKey)
 	ps.deleteConfirmedBlacklist(producerKey)
+	ps.consecutiveMissedBlocks[producerKey] = 0
 }
 
 func (ps *ProducerStats) getNow() time.Time {

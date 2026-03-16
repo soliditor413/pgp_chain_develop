@@ -916,7 +916,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 
 var (
 	blacklistAddVoteMethodID    = methodID("addBlacklistVote(bytes,uint64,bytes,bytes)")
-	blacklistRemoveVoteMethodID = methodID("removeBlacklistVote(bytes,uint64,bytes,bytes)")
+	blacklistRemoveVoteMethodID = methodID("removeBlacklistVote(bytes,bytes,bytes)")
 )
 
 func methodID(signature string) []byte {

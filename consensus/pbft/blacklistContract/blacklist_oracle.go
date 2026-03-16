@@ -54,12 +54,12 @@ func (o *ContractBlacklistOracle) SubmitBlacklistVote(producerKey string, lastSe
 	if err != nil {
 		return err
 	}
-	nonce, err := GetBlacklistVoteNonce(o.contract, o.voterPubKey)
+	nonce, err := GetAddBlacklistVoteNonce(o.contract, o.voterPubKey)
 	if err != nil {
 		return err
 	}
 	contractAddr := common.HexToAddress(o.contract)
-	message := buildBlacklistVoteMessage(contractAddr, chainID, targetPubKey, lastSealBlockHeight, nonce)
+	message := buildAddBlacklistVoteMessage(contractAddr, chainID, targetPubKey, lastSealBlockHeight, nonce)
 	signature := o.signer(message)
 	if len(signature) == 0 {
 		return fmt.Errorf("empty blacklist vote signature")
@@ -76,7 +76,7 @@ func (o *ContractBlacklistOracle) SubmitBlacklistVote(producerKey string, lastSe
 }
 
 // RemoveBlacklistVote sends a blacklist removal vote to the contract.
-func (o *ContractBlacklistOracle) RemoveBlacklistVote(producerKey string, lastSealBlockHeight uint64) error {
+func (o *ContractBlacklistOracle) RemoveBlacklistVote(producerKey string) error {
 	if o == nil {
 		return nil
 	}
@@ -95,34 +95,26 @@ func (o *ContractBlacklistOracle) RemoveBlacklistVote(producerKey string, lastSe
 	}
 	o.voteMu.Lock()
 	defer o.voteMu.Unlock()
-	blacklisted, err := IsBlacklisted(o.contract, targetPubKey)
-	if err != nil {
-		return err
-	}
-	if !blacklisted {
-		return nil
-	}
 	chainID, err := GetChainID()
 	if err != nil {
 		return err
 	}
-	nonce, err := GetBlacklistVoteNonce(o.contract, o.voterPubKey)
+	nonce, err := GetRemoveBlacklistVoteNonce(o.contract, o.voterPubKey)
 	if err != nil {
 		return err
 	}
 	contractAddr := common.HexToAddress(o.contract)
-	message := buildBlacklistVoteMessage(contractAddr, chainID, targetPubKey, lastSealBlockHeight, nonce)
+	message := buildRemoveBlacklistVoteMessage(contractAddr, chainID, targetPubKey, nonce)
 	signature := o.signer(message)
 	if len(signature) == 0 {
 		return fmt.Errorf("empty blacklist removal vote signature")
 	}
-	txHash, err := SendRemoveBlacklistVote(o.contract, targetPubKey, lastSealBlockHeight, o.voterPubKey, signature)
+	txHash, err := SendRemoveBlacklistVote(o.contract, targetPubKey, o.voterPubKey, signature)
 	if err != nil {
 		return err
 	}
 	log.Info("Submit remove blacklist vote",
 		"producer", producerKey,
-		"lastSealHeight", lastSealBlockHeight,
 		"txHash", txHash.String())
 	return nil
 }
@@ -192,14 +184,25 @@ func (o *ContractBlacklistOracle) StopListener() {
 	}
 }
 
-func buildBlacklistVoteMessage(contractAddr common.Address, chainID *big.Int, dposPublicKey []byte, lastSealBlockHeight uint64, nonce *big.Int) []byte {
+func buildAddBlacklistVoteMessage(contractAddr common.Address, chainID *big.Int, dposPublicKey []byte, lastSealBlockHeight uint64, nonce *big.Int) []byte {
 	var buf bytes.Buffer
 	buf.Write(contractAddr.Bytes())
 	buf.Write(encodeUint256(chainID))
+	buf.WriteByte(1)
 	buf.Write(dposPublicKey)
 	height := make([]byte, 8)
 	binary.BigEndian.PutUint64(height, lastSealBlockHeight)
 	buf.Write(height)
+	buf.Write(encodeUint256(nonce))
+	return buf.Bytes()
+}
+
+func buildRemoveBlacklistVoteMessage(contractAddr common.Address, chainID *big.Int, dposPublicKey []byte, nonce *big.Int) []byte {
+	var buf bytes.Buffer
+	buf.Write(contractAddr.Bytes())
+	buf.Write(encodeUint256(chainID))
+	buf.WriteByte(2)
+	buf.Write(dposPublicKey)
 	buf.Write(encodeUint256(nonce))
 	return buf.Bytes()
 }
