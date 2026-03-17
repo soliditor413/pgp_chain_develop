@@ -307,16 +307,15 @@ func SendBlacklistVote(contract string, dposPublicKey []byte, lastSealBlockHeigh
 	if len(dposPublicKey) == 0 || len(voterPublicKey) == 0 || len(signature) == 0 {
 		return common.Hash{}, errors.New("invalid blacklist vote parameters")
 	}
-
 	inputData, err := blacklistABI.Pack("addBlacklistVote", dposPublicKey, lastSealBlockHeight, voterPublicKey, signature)
 	if err != nil {
 		return common.Hash{}, err
 	}
 	contractAddr := common.HexToAddress(contract)
-	if err := precheckContractCall(client, from, contractAddr, inputData); err != nil {
-		log.Error("Blacklist vote PreCheck ContractCall failed", "error", err)
-		return common.Hash{}, err
-	}
+	// if err := precheckContractCall(client, from, contractAddr, inputData); err != nil {
+	// 	log.Error("Blacklist vote PreCheck ContractCall failed", "error", err)
+	// 	return common.Hash{}, err
+	// }
 	gasLimit := uint64(800000)
 	price := big.NewInt(50 * params.GWei)
 	pendingNonce, err := client.PendingNonceAt(context.Background(), from)
