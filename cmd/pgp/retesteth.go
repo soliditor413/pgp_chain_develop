@@ -234,6 +234,10 @@ func (e *NoRewardEngine) GetCurrentProducers() [][]byte {
 	return [][]byte{}
 }
 
+func (e *NoRewardEngine) GetProducersByHeight(height uint64) [][]byte {
+	return e.GetCurrentProducers()
+}
+
 func (e *NoRewardEngine) accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
 	// Simply touch miner and uncle coinbase accounts
 	reward := big.NewInt(0)

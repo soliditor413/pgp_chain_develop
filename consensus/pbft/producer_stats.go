@@ -26,6 +26,8 @@ import (
 const (
 	// InactiveThreshold is the number of consecutive blocks a producer must miss to be marked as inactive
 	InactiveThreshold uint64 = 20
+	// blacklistOpMinInterval 同一 producer 的添加/移除黑名单操作最小间隔，避免重复发送
+	blacklistOpMinInterval = 5 * time.Second
 	// producerStatsDBName is the database name for storing producer statistics
 	producerStatsDBName    = "producer_stats"
 	blacklistDBPrefix      = "blacklist:"
@@ -52,6 +54,9 @@ type ProducerStats struct {
 	lastProcessedBlockHeight uint64    // last processed block height to avoid duplicate processing
 	currentBlockTime         time.Time // last seen block time (from chain)
 	blacklistOracle          BlacklistOracle
+	// 同一 producer 添加/移除黑名单操作节流：上次操作时间
+	muOpTime            sync.Mutex
+	lastBlacklistOpTime map[string]time.Time
 }
 
 type blacklistVoteTarget struct {
@@ -70,6 +75,7 @@ func NewProducerStats(dataDir string) (*ProducerStats, error) {
 		consecutiveMissedBlocks:  make(map[string]uint64),
 		confirmedBlacklist:       make(map[string]struct{}),
 		lastProcessedBlockHeight: 0,
+		lastBlacklistOpTime:      make(map[string]time.Time),
 	}
 
 	// Open database for persistence
@@ -168,7 +174,8 @@ type ParticipationInfo struct {
 // This should be called when a new block is inserted, with the list of current producers
 // blockTime is seconds since epoch from the block header
 func (ps *ProducerStats) UpdateBlockHeight(blockHeight uint64, blockTime uint64, currentProducers [][]byte) {
-	var addTargets []blacklistVoteTarget
+	// 未在 confirmedBlacklist 且已达 InactiveThreshold 的 producer，先收集；释放锁后按是否过期拆成 add / remove
+	var inactiveNotConfirmed []blacklistVoteTarget
 	ps.mu.Lock()
 
 	// Avoid processing the same block height multiple times
@@ -209,15 +216,15 @@ func (ps *ProducerStats) UpdateBlockHeight(blockHeight uint64, blockTime uint64,
 		if lastHeight := ps.lastBlockHeight[producerKey]; lastHeight < blockHeight {
 			ps.consecutiveMissedBlocks[producerKey]++
 			log.Info("Missed Blocks ", "producer:", producerKey, "count:", ps.consecutiveMissedBlocks[producerKey], " InactiveThreshold:", InactiveThreshold)
-			// Check if should be marked as inactive
+			// 未在 confirmedBlacklist 且已达 InactiveThreshold：收集后根据是否过期决定 add 或 remove
 			if ps.consecutiveMissedBlocks[producerKey] >= InactiveThreshold {
 				if _, exists := ps.confirmedBlacklist[producerKey]; !exists {
-					addTargets = append(addTargets, blacklistVoteTarget{
+					inactiveNotConfirmed = append(inactiveNotConfirmed, blacklistVoteTarget{
 						producerKey:    producerKey,
 						lastSealHeight: lastHeight,
 						currentHeight:  blockHeight,
 					})
-					log.Warn("Producer marked as inactive and added to blacklist (cannot participate in consensus)",
+					log.Warn("Producer marked as inactive (cannot participate in consensus)",
 						"producer", producerKey,
 						"consecutiveMissedBlocks", ps.consecutiveMissedBlocks[producerKey],
 						"height", blockHeight)
@@ -239,10 +246,31 @@ func (ps *ProducerStats) UpdateBlockHeight(blockHeight uint64, blockTime uint64,
 	}
 	ps.mu.Unlock()
 
+	// 释放锁后按是否过期拆分：已过期则加入 remove 列表并尝试移除投票，未过期则加入黑名单
+	var addTargets []blacklistVoteTarget
+	var removeTargets []blacklistVoteTarget
+	if ps.blacklistOracle != nil {
+		for _, t := range inactiveNotConfirmed {
+			expired, err := ps.blacklistOracle.IsExpired(common.Hex2Bytes(t.producerKey))
+			if err != nil {
+				log.Error("Query blacklist expired status failed", "producer", t.producerKey, "error", err)
+				continue
+			}
+			if expired {
+				log.Info("Producer is expired, add to remove targets", "producer", t.producerKey)
+				removeTargets = append(removeTargets, t)
+			} else {
+				log.Info("Producer is not expired, add to add targets", "producer", t.producerKey)
+				addTargets = append(addTargets, t)
+			}
+		}
+	} else {
+		addTargets = inactiveNotConfirmed
+	}
 	for _, target := range addTargets {
 		ps.addToBlacklist(target.producerKey, target.lastSealHeight, target.currentHeight)
 	}
-	ps.trySubmitRemoveBlacklistVotes()
+	ps.trySubmitRemoveBlacklistVotes(removeTargets)
 }
 
 // GetConsecutiveMissedBlocks returns the number of consecutive blocks a producer has missed
@@ -260,6 +288,14 @@ func (ps *ProducerStats) GetConsecutiveMissedBlocks(producerPubKey []byte) uint6
 
 // addToBlacklist adds a producer to the blacklist
 func (ps *ProducerStats) addToBlacklist(producerKey string, lastSealHeight uint64, currentHeight uint64) {
+	ps.muOpTime.Lock()
+	if last, ok := ps.lastBlacklistOpTime[producerKey]; ok && time.Since(last) < blacklistOpMinInterval {
+		ps.muOpTime.Unlock()
+		log.Debug("Skip add blacklist: within min interval", "producer", producerKey)
+		return
+	}
+	ps.muOpTime.Unlock()
+
 	// Submit blacklist vote to contract (best-effort)
 	if err := ps.submitBlacklistVote(producerKey, lastSealHeight); err != nil {
 		log.Error("Submit blacklist vote failed",
@@ -268,6 +304,9 @@ func (ps *ProducerStats) addToBlacklist(producerKey string, lastSealHeight uint6
 			"error", err)
 		return
 	}
+	ps.muOpTime.Lock()
+	ps.lastBlacklistOpTime[producerKey] = time.Now()
+	ps.muOpTime.Unlock()
 	log.Warn("Producer marked as inactive and submitted blacklist vote",
 		"producer", producerKey,
 		"lastSealHeight", lastSealHeight,
@@ -300,11 +339,24 @@ func (ps *ProducerStats) submitBlacklistVote(producerKey string, lastSealBlockHe
 	return ps.blacklistOracle.SubmitBlacklistVote(producerKey, lastSealBlockHeight)
 }
 
-func (ps *ProducerStats) trySubmitRemoveBlacklistVotes() {
+// trySubmitRemoveBlacklistVotes 对 snapshot 中的目标以及可选的 extraTargets 尝试提交移除黑名单投票（仅对已过期的提交）。
+// extraTargets 用于本次未在 confirmedBlacklist 但已过期的 producer，由 UpdateBlockHeight 传入。
+func (ps *ProducerStats) trySubmitRemoveBlacklistVotes(extraTargets []blacklistVoteTarget) {
 	if ps.blacklistOracle == nil {
 		return
 	}
-	for _, target := range ps.snapshotRemoveVoteTargets() {
+	targets := ps.snapshotRemoveVoteTargets()
+	seen := make(map[string]bool)
+	for _, t := range targets {
+		seen[t.producerKey] = true
+	}
+	for _, t := range extraTargets {
+		if !seen[t.producerKey] {
+			seen[t.producerKey] = true
+			targets = append(targets, t)
+		}
+	}
+	for _, target := range targets {
 		producerKey := target.producerKey
 		targetPubKey := common.Hex2Bytes(producerKey)
 		expired, err := ps.blacklistOracle.IsExpired(targetPubKey)
@@ -323,12 +375,22 @@ func (ps *ProducerStats) trySubmitRemoveBlacklistVotes() {
 		if removeVoted {
 			continue
 		}
+		ps.muOpTime.Lock()
+		if last, ok := ps.lastBlacklistOpTime[producerKey]; ok && time.Since(last) < blacklistOpMinInterval {
+			ps.muOpTime.Unlock()
+			log.Debug("Skip remove blacklist vote: within min interval", "producer", producerKey)
+			continue
+		}
+		ps.muOpTime.Unlock()
 		if err := ps.blacklistOracle.RemoveBlacklistVote(producerKey); err != nil {
 			log.Error("Submit remove blacklist vote failed",
 				"producer", producerKey,
 				"error", err)
 			continue
 		}
+		ps.muOpTime.Lock()
+		ps.lastBlacklistOpTime[producerKey] = time.Now()
+		ps.muOpTime.Unlock()
 	}
 }
 

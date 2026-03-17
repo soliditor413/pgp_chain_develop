@@ -166,15 +166,25 @@ func (p *Pbft) UpdateCurrentProducers(producers [][]byte, totalCount int, spvHei
 	spv.SetCurrentProducers(producers)
 }
 
-func (p *Pbft) GetCurrentProducers() [][]byte {
-	list := p.dispatcher.GetConsensusView().GetProducers()
-	if len(list) == 0 {
-		height := p.chain.CurrentHeader().Height()
-		if p.bPosValidator.IsBPosFork(height) {
-			list, _, _ = p.bPosValidator.GetNextValidatorSet(height)
+func (p *Pbft) GetProducersByHeight(height uint64) [][]byte {
+	if p.bPosValidator.IsBPosFork(height) {
+		currentHeight := p.chain.CurrentHeader().Number.Uint64()
+		if height > currentHeight {
+			height = currentHeight
 		}
+		list, _, err := p.bPosValidator.GetNextValidatorSet(height)
+		if err != nil {
+			log.Error("GetProducersByHeight bpos fork error", "error", err)
+		}
+		return list
+	} else {
+		list := p.dispatcher.GetConsensusView().GetProducers()
+		return list
 	}
-	return list
+}
+
+func (p *Pbft) GetCurrentProducers() [][]byte {
+	return p.dispatcher.GetConsensusView().GetProducers()
 }
 
 func (p *Pbft) IsProducerByAccount(account []byte) bool {

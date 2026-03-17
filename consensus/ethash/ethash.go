@@ -602,6 +602,10 @@ func (ethash *Ethash) GetCurrentProducers() [][]byte {
 	return [][]byte{}
 }
 
+func (ethash *Ethash) GetProducersByHeight(height uint64) [][]byte {
+	return ethash.GetCurrentProducers()
+}
+
 // cache tries to retrieve a verification cache for the specified block number
 // by first checking against a list of in-memory caches, then against caches
 // stored on disk, and finally generating one if none can be found.
