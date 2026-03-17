@@ -2,11 +2,13 @@ package blacklistcontract
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"math/big"
 	"sync"
 
+	elaCrypto "github.com/elastos/Elastos.ELA/crypto"
 	"github.com/pgprotocol/pgp-chain/common"
 	"github.com/pgprotocol/pgp-chain/log"
 )
@@ -75,6 +77,96 @@ func (o *ContractBlacklistOracle) SubmitBlacklistVote(producerKey string, lastSe
 	return nil
 }
 
+// SubmitBlacklistVotesBatch 批量提交添加黑名单投票：只拉取一次 nonce，然后依次用 nonce、nonce+1、nonce+2… 签名发送，保证多笔都能成功。
+func (o *ContractBlacklistOracle) SubmitBlacklistVotesBatch(producerKeys []string, lastSealHeights []uint64) error {
+	if o == nil {
+		return nil
+	}
+	if len(producerKeys) != len(lastSealHeights) || len(producerKeys) == 0 {
+		return fmt.Errorf("invalid batch: producerKeys and lastSealHeights length must match and be non-empty")
+	}
+	if o.contract == "" || !common.IsHexAddress(o.contract) {
+		return fmt.Errorf("blacklist contract address is invalid: %s", o.contract)
+	}
+	if o.signer == nil || len(o.voterPubKey) == 0 {
+		return fmt.Errorf("blacklist signer is not configured")
+	}
+	o.voteMu.Lock()
+	defer o.voteMu.Unlock()
+	chainID, err := GetChainID()
+	if err != nil {
+		return err
+	}
+	nonce, err := GetAddBlacklistVoteNonce(o.contract, o.voterPubKey)
+	if err != nil {
+		return err
+	}
+	contractAddr := common.HexToAddress(o.contract)
+	for i := range producerKeys {
+		targetPubKey := common.Hex2Bytes(producerKeys[i])
+		if len(targetPubKey) == 0 {
+			log.Error("Invalid producer public key in batch", "producer", producerKeys[i], "index", i)
+			continue
+		}
+		// 使用 nonce + i，保证每笔签名使用的 nonce 递增，链上执行时与合约内 nonce 一致
+		ni := new(big.Int).Add(nonce, big.NewInt(int64(i)))
+		message := buildAddBlacklistVoteMessage(contractAddr, chainID, targetPubKey, lastSealHeights[i], ni)
+		signature := o.signer(message)
+		if len(signature) == 0 {
+			log.Error("Empty blacklist vote signature in batch", "producer", producerKeys[i], "index", i)
+			continue
+		}
+		// 签名验证：校验签名是否为 voterPubKey 对应私钥、数据为 message
+		valid := false
+		if len(signature) > 0 && len(o.voterPubKey) == 33 {
+			publicKey, err := elaCrypto.DecodePoint(o.voterPubKey)
+			if err != nil {
+				log.Error("Failed to decode voter public key when verifying signature in batch", "err", err)
+			} else {
+				err = elaCrypto.Verify(*publicKey, message, signature)
+				if err != nil {
+					log.Error("Failed to verify signature in batch", "err", err)
+				} else {
+					valid = true
+				}
+			}
+		}
+		if !valid {
+			log.Error("Blacklist vote signature verification failed in batch", "producer", producerKeys[i], "index", i)
+			continue
+		}
+		fmt.Println("targetPubKey", common.Bytes2Hex(targetPubKey))
+		fmt.Println("voterPubKey", common.Bytes2Hex(o.voterPubKey))
+		fmt.Println("valid", valid)
+
+		digest := sha256.Sum256(message)
+		fmt.Println("digest", common.Bytes2Hex(digest[:]))
+		fmt.Println("signature", common.Bytes2Hex(signature))
+		fmt.Println("message", common.Bytes2Hex(message))
+		publicKey, err := elaCrypto.DecodePoint(o.voterPubKey)
+		if err != nil {
+			log.Error("Failed to decode voter public key when verifying signature in batch", "err", err)
+		} else {
+			err = elaCrypto.VerifyDigest(*publicKey, digest[:], signature)
+			if err != nil {
+				log.Error("Failed to verify signature in batch", "err", err)
+			} else {
+				fmt.Println("valid2", valid)
+			}
+		}
+		txHash, err := SendBlacklistVote(o.contract, targetPubKey, lastSealHeights[i], o.voterPubKey, signature)
+		if err != nil {
+			log.Error("Submit blacklist vote failed in batch", "producer", producerKeys[i], "index", i, "error", err)
+			continue
+		}
+		log.Info("Submit blacklist vote (batch)",
+			"producer", producerKeys[i],
+			"lastSealHeight", lastSealHeights[i],
+			"txHash", txHash.String())
+	}
+	return nil
+}
+
 // RemoveBlacklistVote sends a blacklist removal vote to the contract.
 func (o *ContractBlacklistOracle) RemoveBlacklistVote(producerKey string) error {
 	if o == nil {
@@ -116,6 +208,56 @@ func (o *ContractBlacklistOracle) RemoveBlacklistVote(producerKey string) error 
 	log.Info("Submit remove blacklist vote",
 		"producer", producerKey,
 		"txHash", txHash.String())
+	return nil
+}
+
+// SubmitRemoveBlacklistVotesBatch 批量提交移除黑名单投票：只拉取一次 nonce，然后依次用 nonce、nonce+1、nonce+2… 签名发送。
+func (o *ContractBlacklistOracle) SubmitRemoveBlacklistVotesBatch(producerKeys []string) error {
+	if o == nil {
+		return nil
+	}
+	if len(producerKeys) == 0 {
+		return nil
+	}
+	if o.contract == "" || !common.IsHexAddress(o.contract) {
+		return fmt.Errorf("blacklist contract address is invalid: %s", o.contract)
+	}
+	if o.signer == nil || len(o.voterPubKey) == 0 {
+		return fmt.Errorf("blacklist signer is not configured")
+	}
+	o.voteMu.Lock()
+	defer o.voteMu.Unlock()
+	chainID, err := GetChainID()
+	if err != nil {
+		return err
+	}
+	nonce, err := GetRemoveBlacklistVoteNonce(o.contract, o.voterPubKey)
+	if err != nil {
+		return err
+	}
+	contractAddr := common.HexToAddress(o.contract)
+	for i := range producerKeys {
+		targetPubKey := common.Hex2Bytes(producerKeys[i])
+		if len(targetPubKey) == 0 {
+			log.Error("Invalid producer public key in remove batch", "producer", producerKeys[i], "index", i)
+			continue
+		}
+		ni := new(big.Int).Add(nonce, big.NewInt(int64(i)))
+		message := buildRemoveBlacklistVoteMessage(contractAddr, chainID, targetPubKey, ni)
+		signature := o.signer(message)
+		if len(signature) == 0 {
+			log.Error("Empty remove blacklist vote signature in batch", "producer", producerKeys[i], "index", i)
+			continue
+		}
+		txHash, err := SendRemoveBlacklistVote(o.contract, targetPubKey, o.voterPubKey, signature)
+		if err != nil {
+			log.Error("Submit remove blacklist vote failed in batch", "producer", producerKeys[i], "index", i, "error", err)
+			continue
+		}
+		log.Info("Submit remove blacklist vote (batch)",
+			"producer", producerKeys[i],
+			"txHash", txHash.String())
+	}
 	return nil
 }
 

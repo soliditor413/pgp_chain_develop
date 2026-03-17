@@ -192,11 +192,9 @@ func (ps *ProducerStats) UpdateBlockHeight(blockHeight uint64, blockTime uint64,
 	producerSet := make(map[string]bool)
 	for _, producer := range currentProducers {
 		producerKey := common.Bytes2Hex(producer)
-		fmt.Println("producerKey ", producerKey)
 		producerSet[producerKey] = true
 		if _, exists := ps.lastParticipationTime[producerKey]; !exists {
 			// New producer, initialize with 0 missed blocks
-			log.Info(" is New producer, set missed block to 0", " producerKey ", producerKey)
 			ps.consecutiveMissedBlocks[producerKey] = 0
 			ps.lastParticipationTime[producerKey] = 0
 		}
@@ -207,7 +205,6 @@ func (ps *ProducerStats) UpdateBlockHeight(blockHeight uint64, blockTime uint64,
 	for producerKey := range ps.lastParticipationTime {
 		// Only track if this producer is in the current producer list
 		if !producerSet[producerKey] {
-			log.Warn("is not in current producers ", "producer:", producerKey)
 			continue
 		}
 
@@ -267,8 +264,35 @@ func (ps *ProducerStats) UpdateBlockHeight(blockHeight uint64, blockTime uint64,
 	} else {
 		addTargets = inactiveNotConfirmed
 	}
-	for _, target := range addTargets {
-		ps.addToBlacklist(target.producerKey, target.lastSealHeight, target.currentHeight)
+	// 先按 5 秒节流过滤，再按合约 hasAddVoted 过滤已投过票的，最后统一用 SubmitBlacklistVotesBatch 提交（内部用 nonce, nonce+1, ...）
+	allowedAddTargets := ps.filterAddTargetsByThrottle(addTargets)
+	if len(allowedAddTargets) > 0 && ps.blacklistOracle != nil {
+		var batchTargets []blacklistVoteTarget
+		for _, t := range allowedAddTargets {
+			voted, err := ps.blacklistOracle.HasAddVoted(common.Hex2Bytes(t.producerKey))
+			if err != nil {
+				log.Error("Query hasAddVoted failed", "producer", t.producerKey, "error", err)
+				continue
+			}
+			if voted {
+				log.Info("Producer has already submitted add vote", "producer", t.producerKey)
+				continue
+			}
+			batchTargets = append(batchTargets, t)
+		}
+		if len(batchTargets) > 0 {
+			keys := make([]string, len(batchTargets))
+			heights := make([]uint64, len(batchTargets))
+			for i, t := range batchTargets {
+				keys[i] = t.producerKey
+				heights[i] = t.lastSealHeight
+			}
+			if err := ps.blacklistOracle.SubmitBlacklistVotesBatch(keys, heights); err != nil {
+				log.Error("Submit blacklist votes batch failed", "error", err)
+			} else {
+				ps.recordBlacklistOpTime(keys)
+			}
+		}
 	}
 	ps.trySubmitRemoveBlacklistVotes(removeTargets)
 }
@@ -284,6 +308,30 @@ func (ps *ProducerStats) GetConsecutiveMissedBlocks(producerPubKey []byte) uint6
 
 	producerKey := common.Bytes2Hex(producerPubKey)
 	return ps.consecutiveMissedBlocks[producerKey]
+}
+
+// filterAddTargetsByThrottle 过滤掉 5 秒内已有黑名单操作的 producer，避免重复发送。
+func (ps *ProducerStats) filterAddTargetsByThrottle(targets []blacklistVoteTarget) []blacklistVoteTarget {
+	ps.muOpTime.Lock()
+	defer ps.muOpTime.Unlock()
+	out := make([]blacklistVoteTarget, 0, len(targets))
+	for _, t := range targets {
+		if last, ok := ps.lastBlacklistOpTime[t.producerKey]; ok && time.Since(last) < blacklistOpMinInterval {
+			continue
+		}
+		out = append(out, t)
+	}
+	return out
+}
+
+// recordBlacklistOpTime 记录批量添加黑名单后每个 producer 的操作时间（用于 5 秒节流）。
+func (ps *ProducerStats) recordBlacklistOpTime(producerKeys []string) {
+	now := time.Now()
+	ps.muOpTime.Lock()
+	defer ps.muOpTime.Unlock()
+	for _, k := range producerKeys {
+		ps.lastBlacklistOpTime[k] = now
+	}
 }
 
 // addToBlacklist adds a producer to the blacklist
@@ -340,6 +388,7 @@ func (ps *ProducerStats) submitBlacklistVote(producerKey string, lastSealBlockHe
 }
 
 // trySubmitRemoveBlacklistVotes 对 snapshot 中的目标以及可选的 extraTargets 尝试提交移除黑名单投票（仅对已过期的提交）。
+// 通过条件的目标统一用 SubmitRemoveBlacklistVotesBatch 批量提交（nonce, nonce+1, ...），避免多笔同 nonce。
 // extraTargets 用于本次未在 confirmedBlacklist 但已过期的 producer，由 UpdateBlockHeight 传入。
 func (ps *ProducerStats) trySubmitRemoveBlacklistVotes(extraTargets []blacklistVoteTarget) {
 	if ps.blacklistOracle == nil {
@@ -356,6 +405,7 @@ func (ps *ProducerStats) trySubmitRemoveBlacklistVotes(extraTargets []blacklistV
 			targets = append(targets, t)
 		}
 	}
+	var toRemove []string
 	for _, target := range targets {
 		producerKey := target.producerKey
 		targetPubKey := common.Hex2Bytes(producerKey)
@@ -382,15 +432,29 @@ func (ps *ProducerStats) trySubmitRemoveBlacklistVotes(extraTargets []blacklistV
 			continue
 		}
 		ps.muOpTime.Unlock()
-		if err := ps.blacklistOracle.RemoveBlacklistVote(producerKey); err != nil {
-			log.Error("Submit remove blacklist vote failed",
-				"producer", producerKey,
-				"error", err)
-			continue
+		toRemove = append(toRemove, producerKey)
+	}
+	// 提交前再按合约 hasRemoveVoted 过滤一次，只提交未投过移除票的
+	if len(toRemove) > 0 {
+		var batchRemove []string
+		for _, producerKey := range toRemove {
+			voted, err := ps.blacklistOracle.HasRemoveVoted(common.Hex2Bytes(producerKey))
+			if err != nil {
+				log.Error("Query hasRemoveVoted failed before batch", "producer", producerKey, "error", err)
+				continue
+			}
+			if voted {
+				continue
+			}
+			batchRemove = append(batchRemove, producerKey)
 		}
-		ps.muOpTime.Lock()
-		ps.lastBlacklistOpTime[producerKey] = time.Now()
-		ps.muOpTime.Unlock()
+		if len(batchRemove) > 0 {
+			if err := ps.blacklistOracle.SubmitRemoveBlacklistVotesBatch(batchRemove); err != nil {
+				log.Error("Submit remove blacklist votes batch failed", "error", err)
+			} else {
+				ps.recordBlacklistOpTime(batchRemove)
+			}
+		}
 	}
 }
 
