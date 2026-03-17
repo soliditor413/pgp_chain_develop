@@ -11,6 +11,7 @@ import (
 	"github.com/pgprotocol/pgp-chain/common"
 	"github.com/pgprotocol/pgp-chain/ethclient"
 	"github.com/pgprotocol/pgp-chain/log"
+	"github.com/pgprotocol/pgp-chain/params"
 	"github.com/pgprotocol/pgp-chain/spv"
 )
 
@@ -316,20 +317,8 @@ func SendBlacklistVote(contract string, dposPublicKey []byte, lastSealBlockHeigh
 		log.Error("Blacklist vote PreCheck ContractCall failed", "error", err)
 		return common.Hash{}, err
 	}
-	msg := ethereum.CallMsg{From: from, To: &contractAddr, Data: inputData}
-	gasLimit, err := estimateBlacklistVoteGas(client, msg)
-	if err != nil {
-		log.Error("Blacklist vote EstimateGas failed", "error", err)
-		return common.Hash{}, err
-	}
-	if gasLimit == 0 {
-		return common.Hash{}, errors.New("blacklist vote EstimateGas is 0")
-	}
-	price, err := client.SuggestGasPrice(context.Background())
-	if err != nil {
-		log.Error("Blacklist vote SuggestGasPrice failed", "error", err)
-		return common.Hash{}, err
-	}
+	gasLimit := uint64(800000)
+	price := big.NewInt(50 * params.GWei)
 	pendingNonce, err := client.PendingNonceAt(context.Background(), from)
 	if err != nil {
 		return common.Hash{}, err
@@ -373,20 +362,9 @@ func SendRemoveBlacklistVote(contract string, dposPublicKey []byte, voterPublicK
 	if err := precheckContractCall(client, from, contractAddr, inputData); err != nil {
 		return common.Hash{}, err
 	}
-	msg := ethereum.CallMsg{From: from, To: &contractAddr, Data: inputData}
-	gasLimit, err := estimateBlacklistVoteGas(client, msg)
-	if err != nil {
-		log.Error("Remove blacklist vote EstimateGas failed", "error", err)
-		return common.Hash{}, err
-	}
-	if gasLimit == 0 {
-		return common.Hash{}, errors.New("remove blacklist vote EstimateGas is 0")
-	}
-	price, err := client.SuggestGasPrice(context.Background())
-	if err != nil {
-		log.Error("Remove blacklist vote SuggestGasPrice failed", "error", err)
-		return common.Hash{}, err
-	}
+
+	gasLimit := uint64(800000)
+	price := big.NewInt(50 * params.GWei)
 	pendingNonce, err := client.PendingNonceAt(context.Background(), from)
 	if err != nil {
 		return common.Hash{}, err

@@ -1675,21 +1675,22 @@ func (c *isProducer) RequiredGas(input []byte) uint64 {
 
 func (c *isProducer) Run(input []byte) ([]byte, error) {
 	// Input validation: need at least 33 bytes for producer public key
-	if len(input) < 33 {
+	if len(input) < 65 {
 		log.Warn("checkProducerInactive: invalid input length", "length", len(input))
 		return false32Byte, nil
 	}
 
 	// Extract producer public key (33 bytes)
 	producerPubKey := getData(input, 0, 33)
+	blockNumber := getData(input, 33, 32)
 
 	// Get Pbft engine from spv module
 	if spv.PbftEngine == nil {
 		log.Warn("checkProducerInactive: PbftEngine is nil")
 		return false32Byte, nil
 	}
-
-	list := spv.PbftEngine.GetCurrentProducers()
+	height := big.NewInt(0).SetBytes(blockNumber)
+	list := spv.PbftEngine.GetProducersByHeight(height.Uint64())
 	for _, producer := range list {
 		if bytes.Equal(producer, producerPubKey) {
 			return true32Byte, nil

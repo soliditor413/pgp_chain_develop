@@ -758,6 +758,10 @@ func (c *Clique) GetCurrentProducers() [][]byte {
 	return [][]byte{}
 }
 
+func (c *Clique) GetProducersByHeight(height uint64) [][]byte {
+	return c.GetCurrentProducers()
+}
+
 // Used for test
 func (c *Clique) SetFakeDiff(v bool) {
 	c.fakeDiff = v
