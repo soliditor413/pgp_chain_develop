@@ -5,27 +5,33 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/big"
 	"strings"
 
 	"github.com/elastos/Elastos.ELA/events"
 	"github.com/pgprotocol/pgp-chain/dpos"
 
-	ethereum "github.com/pgprotocol/pgp-chain"
 	"github.com/pgprotocol/pgp-chain/accounts/abi"
 	"github.com/pgprotocol/pgp-chain/common"
 	"github.com/pgprotocol/pgp-chain/core/types"
 	"github.com/pgprotocol/pgp-chain/log"
-	"github.com/pgprotocol/pgp-chain/spv"
+	"github.com/pgprotocol/pgp-chain/rpc"
 )
 
 const validatorABI = `[{"inputs":[],"name":"getNextValidatorSet","outputs":[{"internalType":"bytes[]","name":"validators","type":"bytes[]"},{"internalType":"uint8","name":"totalValidatorsCount","type":"uint8"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"getEpoch0Validators","outputs":[{"internalType":"bytes[]","name":"validators","type":"bytes[]"},{"internalType":"uint8","name":"totalValidatorsCount","type":"uint8"}],"stateMutability":"view","type":"function"}]`
 const BLOCKS_PER_EPOCH = 18 //TODO test for jianbin,should change to 36
 
+// ContractCaller abstracts contract call capability so that BposValidator
+// can call the validator contract in-process (via ethapi) without depending
+// on the ethclient IPC path. The signature mirrors ethapi.PublicBlockChainAPI.Call.
+type ContractCaller interface {
+	Call(ctx context.Context, to common.Address, data []byte, blockNrOrHash rpc.BlockNumberOrHash) ([]byte, error)
+}
+
 type BposValidator struct {
 	validatorContract  string
 	bPosStartHeight    uint64
 	nextTurnValidators *NextTurnValidators
+	caller             ContractCaller
 }
 
 func NewBPosValidator(
@@ -36,6 +42,11 @@ func NewBPosValidator(
 		validatorContract: validatorContract,
 		bPosStartHeight:   bPosStartHeight,
 	}, nil
+}
+
+// SetContractCaller injects the in-process contract caller after the blockchain is ready.
+func (v *BposValidator) SetContractCaller(caller ContractCaller) {
+	v.caller = caller
 }
 
 func (v *BposValidator) OnBlockEvent(block *types.Block) bool {
@@ -56,9 +67,9 @@ func (v *BposValidator) OnBlockEvent(block *types.Block) bool {
 	totalCount := uint8(0)
 	var err error
 	if block.NumberU64() < v.bPosStartHeight && block.NumberU64() > v.bPosStartHeight-BLOCKS_PER_EPOCH {
-		validators, totalCount, err = v.GetEpoch0Validators(block.NumberU64())
+		validators, totalCount, err = v.GetEpoch0Validators(block.Hash())
 	} else {
-		validators, totalCount, err = v.GetNextValidatorSet(block.NumberU64())
+		validators, totalCount, err = v.GetNextValidatorSet(block.Hash())
 	}
 
 	if err != nil {
@@ -113,7 +124,9 @@ func (v *BposValidator) dumpValidators() {
 	fmt.Println("----------------------------------------")
 }
 
-func (v *BposValidator) GetCurrentValidatorSet(height uint64) ([][]byte, uint8, error) {
+// GetCurrentValidatorSet queries the validator contract for the current validator set.
+// blockHash is the hash of the block whose state should be used.
+func (v *BposValidator) GetCurrentValidatorSet(blockHash common.Hash, height uint64) ([][]byte, uint8, error) {
 	if v.validatorContract == "" {
 		return nil, 0, errors.New("validator contract address is empty")
 	}
@@ -126,91 +139,115 @@ func (v *BposValidator) GetCurrentValidatorSet(height uint64) ([][]byte, uint8, 
 	epoch := (height - v.bPosStartHeight) / BLOCKS_PER_EPOCH
 	fmt.Println(">>>>>>>>>>> GetCurrentValidatorSet <<<<<<<<<<< epoch ", epoch)
 	if epoch == 0 {
-		return v.GetEpoch0Validators(height)
+		return v.GetEpoch0Validators(blockHash)
 	}
-	return v.GetNextValidatorSet(height - BLOCKS_PER_EPOCH)
+	// For non-zero epoch we need the state at (height - BLOCKS_PER_EPOCH).
+	// We don't have that block's hash here, so fall back to block number query.
+	return v.getValidatorsByNumber("getNextValidatorSet", height-BLOCKS_PER_EPOCH)
 }
 
-func (v *BposValidator) GetEpoch0Validators(height uint64) ([][]byte, uint8, error) {
+// GetEpoch0Validators queries the contract at the given block hash.
+func (v *BposValidator) GetEpoch0Validators(blockHash common.Hash) ([][]byte, uint8, error) {
+	return v.callValidatorContract("getEpoch0Validators", blockHash)
+}
+
+// GetNextValidatorSet queries the contract at the given block hash.
+func (v *BposValidator) GetNextValidatorSet(blockHash common.Hash) ([][]byte, uint8, error) {
+	return v.callValidatorContract("getNextValidatorSet", blockHash)
+}
+
+// GetNextValidatorSetByNumber queries the contract at the given block number (used when block hash is unavailable).
+func (v *BposValidator) GetNextValidatorSetByNumber(height uint64) ([][]byte, uint8, error) {
+	return v.getValidatorsByNumber("getNextValidatorSet", height)
+}
+
+// callValidatorContract calls the validator contract method at a specific block hash (in-process, state guaranteed in memory).
+func (v *BposValidator) callValidatorContract(method string, blockHash common.Hash) ([][]byte, uint8, error) {
 	if v.validatorContract == "" {
 		return nil, 0, errors.New("validator contract address is empty")
 	}
 	if !common.IsHexAddress(v.validatorContract) {
 		return nil, 0, errors.New("validator contract address is invalid")
 	}
-	client := spv.GetClient()
-	if client == nil {
-		return nil, 0, errors.New("spv eth client is nil")
+	if v.caller == nil {
+		return nil, 0, errors.New("contract caller is not configured (blockchain not ready)")
 	}
 	contractABI, err := abi.JSON(strings.NewReader(validatorABI))
 	if err != nil {
 		return nil, 0, err
 	}
+	data, err := contractABI.Pack(method)
+	if err != nil {
+		return nil, 0, err
+	}
 	contractAddr := common.HexToAddress(v.validatorContract)
-	data, err := contractABI.Pack("getEpoch0Validators")
+	blockNrOrHash := rpc.BlockNumberOrHashWithHash(blockHash, false)
+	output, err := v.caller.Call(context.Background(), contractAddr, data, blockNrOrHash)
 	if err != nil {
-		return nil, 0, err
-	}
-	msg := ethereum.CallMsg{
-		To:   &contractAddr,
-		Data: data,
-	}
-	blockNum := new(big.Int).SetUint64(height)
-	output, err := client.CallContract(context.Background(), msg, blockNum)
-	if err != nil {
-		return nil, 0, err
+		return nil, 0, fmt.Errorf("%s call failed: %w", method, err)
 	}
 	if len(output) == 0 {
-		return nil, 0, errors.New("empty response from getEpoch0Validators")
+		return nil, 0, fmt.Errorf("empty response from %s", method)
 	}
 	var resp struct {
 		Validators           [][]byte
 		TotalValidatorsCount uint8
 	}
-	if err := contractABI.UnpackIntoInterface(&resp, "getEpoch0Validators", output); err != nil {
+	if err := contractABI.UnpackIntoInterface(&resp, method, output); err != nil {
 		return nil, 0, err
 	}
 	return resp.Validators, resp.TotalValidatorsCount, nil
 }
 
-func (v *BposValidator) GetNextValidatorSet(height uint64) ([][]byte, uint8, error) {
+// getValidatorsByNumber calls the validator contract at a specific block number.
+func (v *BposValidator) getValidatorsByNumber(method string, height uint64) ([][]byte, uint8, error) {
 	if v.validatorContract == "" {
 		return nil, 0, errors.New("validator contract address is empty")
 	}
 	if !common.IsHexAddress(v.validatorContract) {
 		return nil, 0, errors.New("validator contract address is invalid")
 	}
-	client := spv.GetClient()
-	if client == nil {
-		return nil, 0, errors.New("spv eth client is nil")
+	if v.caller == nil {
+		return nil, 0, errors.New("contract caller is not configured (blockchain not ready)")
 	}
 	contractABI, err := abi.JSON(strings.NewReader(validatorABI))
 	if err != nil {
 		return nil, 0, err
 	}
+	data, err := contractABI.Pack(method)
+	if err != nil {
+		return nil, 0, err
+	}
 	contractAddr := common.HexToAddress(v.validatorContract)
-	data, err := contractABI.Pack("getNextValidatorSet")
+	blockNr := rpc.BlockNumber(height)
+	blockNrOrHash := rpc.BlockNumberOrHashWithNumber(blockNr)
+	output, err := v.caller.Call(context.Background(), contractAddr, data, blockNrOrHash)
 	if err != nil {
-		return nil, 0, err
-	}
-	msg := ethereum.CallMsg{
-		To:   &contractAddr,
-		Data: data,
-	}
-	blockNum := new(big.Int).SetUint64(height)
-	output, err := client.CallContract(context.Background(), msg, blockNum)
-	if err != nil {
-		return nil, 0, err
+		return nil, 0, fmt.Errorf("%s call failed at height %d: %w", method, height, err)
 	}
 	if len(output) == 0 {
-		return nil, 0, errors.New("empty response from getNextValidatorSet")
+		return nil, 0, fmt.Errorf("empty response from %s at height %d", method, height)
 	}
 	var resp struct {
 		Validators           [][]byte
 		TotalValidatorsCount uint8
 	}
-	if err := contractABI.UnpackIntoInterface(&resp, "getNextValidatorSet", output); err != nil {
+	if err := contractABI.UnpackIntoInterface(&resp, method, output); err != nil {
 		return nil, 0, err
 	}
 	return resp.Validators, resp.TotalValidatorsCount, nil
+}
+
+// EthAPICaller implements ContractCaller using ethapi.PublicBlockChainAPI.
+// It lives here to keep the interface and default impl together; wired in eth/backend.go.
+type EthAPICaller struct {
+	callFn func(ctx context.Context, to common.Address, data []byte, blockNrOrHash rpc.BlockNumberOrHash) ([]byte, error)
+}
+
+func NewEthAPICaller(callFn func(ctx context.Context, to common.Address, data []byte, blockNrOrHash rpc.BlockNumberOrHash) ([]byte, error)) *EthAPICaller {
+	return &EthAPICaller{callFn: callFn}
+}
+
+func (c *EthAPICaller) Call(ctx context.Context, to common.Address, data []byte, blockNrOrHash rpc.BlockNumberOrHash) ([]byte, error) {
+	return c.callFn(ctx, to, data, blockNrOrHash)
 }

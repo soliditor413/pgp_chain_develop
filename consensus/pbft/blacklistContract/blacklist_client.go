@@ -11,7 +11,6 @@ import (
 	"github.com/pgprotocol/pgp-chain/common"
 	"github.com/pgprotocol/pgp-chain/ethclient"
 	"github.com/pgprotocol/pgp-chain/log"
-	"github.com/pgprotocol/pgp-chain/params"
 	"github.com/pgprotocol/pgp-chain/spv"
 )
 
@@ -76,6 +75,11 @@ const blacklistABIMetaData = `[
 				"internalType": "bytes",
 				"name": "voterPublicKey",
 				"type": "bytes"
+			},
+			{
+				"internalType": "bytes",
+				"name": "targetPublicKey",
+				"type": "bytes"
 			}
 		],
 		"name": "getAddVoteNonce",
@@ -94,6 +98,11 @@ const blacklistABIMetaData = `[
 			{
 				"internalType": "bytes",
 				"name": "voterPublicKey",
+				"type": "bytes"
+			},
+			{
+				"internalType": "bytes",
+				"name": "targetPublicKey",
 				"type": "bytes"
 			}
 		],
@@ -290,6 +299,12 @@ func init() {
 
 // SendBlacklistVote submits a blacklist vote transaction to the configured contract.
 func SendBlacklistVote(contract string, dposPublicKey []byte, lastSealBlockHeight uint64, voterPublicKey []byte, signature []byte) (common.Hash, error) {
+	return SendBlacklistVoteWithNonce(contract, dposPublicKey, lastSealBlockHeight, voterPublicKey, signature, nil)
+}
+
+// SendBlacklistVoteWithNonce submits a blacklist vote transaction with an explicit nonce.
+// If nonceOverride is nil, it queries PendingNonceAt automatically.
+func SendBlacklistVoteWithNonce(contract string, dposPublicKey []byte, lastSealBlockHeight uint64, voterPublicKey []byte, signature []byte, nonceOverride *uint64) (common.Hash, error) {
 	client := spv.GetIPCClient()
 	if client == nil {
 		return common.Hash{}, errors.New("spv ipc client is nil")
@@ -312,15 +327,25 @@ func SendBlacklistVote(contract string, dposPublicKey []byte, lastSealBlockHeigh
 		return common.Hash{}, err
 	}
 	contractAddr := common.HexToAddress(contract)
-	// if err := precheckContractCall(client, from, contractAddr, inputData); err != nil {
-	// 	log.Error("Blacklist vote PreCheck ContractCall failed", "error", err)
-	// 	return common.Hash{}, err
-	// }
+	if err := precheckContractCall(client, from, contractAddr, inputData); err != nil {
+		log.Error("Blacklist vote PreCheck ContractCall failed", "error", err)
+		return common.Hash{}, err
+	}
 	gasLimit := uint64(800000)
-	price := big.NewInt(50 * params.GWei)
-	pendingNonce, err := client.PendingNonceAt(context.Background(), from)
+	gasprice, err := client.SuggestGasPrice(context.Background())
 	if err != nil {
 		return common.Hash{}, err
+	}
+	price := new(big.Int).Mul(gasprice, big.NewInt(100+10))
+	price.Div(price, big.NewInt(100))
+	var nonce uint64
+	if nonceOverride != nil {
+		nonce = *nonceOverride
+	} else {
+		nonce, err = client.PendingNonceAt(context.Background(), from)
+		if err != nil {
+			return common.Hash{}, err
+		}
 	}
 	callMsg := ethereum.TXMsg{
 		From:     from,
@@ -328,13 +353,19 @@ func SendBlacklistVote(contract string, dposPublicKey []byte, lastSealBlockHeigh
 		Gas:      gasLimit,
 		Data:     inputData,
 		GasPrice: price,
-		Nonce:    pendingNonce,
+		Nonce:    nonce,
 	}
 	return client.SendPublicTransaction(context.Background(), callMsg)
 }
 
 // SendRemoveBlacklistVote submits a blacklist removal vote transaction.
 func SendRemoveBlacklistVote(contract string, dposPublicKey []byte, voterPublicKey []byte, signature []byte) (common.Hash, error) {
+	return SendRemoveBlacklistVoteWithNonce(contract, dposPublicKey, voterPublicKey, signature, nil)
+}
+
+// SendRemoveBlacklistVoteWithNonce submits a blacklist removal vote transaction with an explicit nonce.
+// If nonceOverride is nil, it queries PendingNonceAt automatically.
+func SendRemoveBlacklistVoteWithNonce(contract string, dposPublicKey []byte, voterPublicKey []byte, signature []byte, nonceOverride *uint64) (common.Hash, error) {
 	client := spv.GetIPCClient()
 	if client == nil {
 		return common.Hash{}, errors.New("spv ipc client is nil")
@@ -363,10 +394,20 @@ func SendRemoveBlacklistVote(contract string, dposPublicKey []byte, voterPublicK
 	}
 
 	gasLimit := uint64(800000)
-	price := big.NewInt(50 * params.GWei)
-	pendingNonce, err := client.PendingNonceAt(context.Background(), from)
+	gasprice, err := client.SuggestGasPrice(context.Background())
 	if err != nil {
 		return common.Hash{}, err
+	}
+	price := new(big.Int).Mul(gasprice, big.NewInt(100+10))
+	price.Div(price, big.NewInt(100))
+	var nonce uint64
+	if nonceOverride != nil {
+		nonce = *nonceOverride
+	} else {
+		nonce, err = client.PendingNonceAt(context.Background(), from)
+		if err != nil {
+			return common.Hash{}, err
+		}
 	}
 	callmsg := ethereum.TXMsg{
 		From:     from,
@@ -374,13 +415,29 @@ func SendRemoveBlacklistVote(contract string, dposPublicKey []byte, voterPublicK
 		Gas:      gasLimit,
 		Data:     inputData,
 		GasPrice: price,
-		Nonce:    pendingNonce,
+		Nonce:    nonce,
 	}
 	return client.SendPublicTransaction(context.Background(), callmsg)
 }
 
-// GetAddBlacklistVoteNonce returns the add-vote nonce for a voter public key from the pending state.
-func GetAddBlacklistVoteNonce(contract string, voterPublicKey []byte) (*big.Int, error) {
+// GetPendingTxNonce returns the pending nonce for the default signer address.
+func GetPendingTxNonce() (uint64, error) {
+	client := spv.GetIPCClient()
+	if client == nil {
+		return 0, errors.New("spv ipc client is nil")
+	}
+	if spv.GetDefaultSingerAddr == nil {
+		return 0, errors.New("default signer address is not configured")
+	}
+	from := spv.GetDefaultSingerAddr()
+	if (from == common.Address{}) {
+		return 0, errors.New("default signer address is empty")
+	}
+	return client.PendingNonceAt(context.Background(), from)
+}
+
+// GetAddBlacklistVoteNonce returns the add-vote nonce for a (voter, target) pair from the pending state.
+func GetAddBlacklistVoteNonce(contract string, voterPublicKey []byte, targetPublicKey []byte) (*big.Int, error) {
 	client := spv.GetIPCClient()
 	if client == nil {
 		return nil, errors.New("spv ipc client is nil")
@@ -391,7 +448,10 @@ func GetAddBlacklistVoteNonce(contract string, voterPublicKey []byte) (*big.Int,
 	if len(voterPublicKey) == 0 {
 		return nil, errors.New("voter public key is empty")
 	}
-	inputData, err := blacklistABI.Pack("getAddVoteNonce", voterPublicKey)
+	if len(targetPublicKey) == 0 {
+		return nil, errors.New("target public key is empty")
+	}
+	inputData, err := blacklistABI.Pack("getAddVoteNonce", voterPublicKey, targetPublicKey)
 	if err != nil {
 		return nil, err
 	}
@@ -415,8 +475,8 @@ func GetAddBlacklistVoteNonce(contract string, voterPublicKey []byte) (*big.Int,
 	return nonce, nil
 }
 
-// GetRemoveBlacklistVoteNonce returns the remove-vote nonce for a voter public key from the pending state.
-func GetRemoveBlacklistVoteNonce(contract string, voterPublicKey []byte) (*big.Int, error) {
+// GetRemoveBlacklistVoteNonce returns the remove-vote nonce for a (voter, target) pair from the pending state.
+func GetRemoveBlacklistVoteNonce(contract string, voterPublicKey []byte, targetPublicKey []byte) (*big.Int, error) {
 	client := spv.GetIPCClient()
 	if client == nil {
 		return nil, errors.New("spv ipc client is nil")
@@ -427,7 +487,10 @@ func GetRemoveBlacklistVoteNonce(contract string, voterPublicKey []byte) (*big.I
 	if len(voterPublicKey) == 0 {
 		return nil, errors.New("voter public key is empty")
 	}
-	inputData, err := blacklistABI.Pack("getRemoveVoteNonce", voterPublicKey)
+	if len(targetPublicKey) == 0 {
+		return nil, errors.New("target public key is empty")
+	}
+	inputData, err := blacklistABI.Pack("getRemoveVoteNonce", voterPublicKey, targetPublicKey)
 	if err != nil {
 		return nil, err
 	}

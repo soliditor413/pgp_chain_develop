@@ -547,11 +547,9 @@ func (ec *Client) CurrentBlockNumber(ctx context.Context) (uint64, error) {
 
 func toSendTxArg(msg ethereum.TXMsg) interface{} {
 	arg := map[string]interface{}{
-		"from": msg.From,
-		"to":   msg.To,
-	}
-	if msg.Nonce != 0 {
-		arg["nonce"] = hexutil.Uint64(msg.Nonce)
+		"from":  msg.From,
+		"to":    msg.To,
+		"nonce": hexutil.Uint64(msg.Nonce),
 	}
 	if len(msg.Data) > 0 {
 		arg["data"] = hexutil.Bytes(msg.Data)

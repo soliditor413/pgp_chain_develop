@@ -738,19 +738,14 @@ func (c *p256Verify) Run(input []byte) ([]byte, error) {
 	pubkey := getData(input, 0, 33)
 	digest := getData(input, 33, 32)
 	sig := getData(input, 65, 64)
-	fmt.Println("in precompiled contract pubkey", common.Bytes2Hex(pubkey))
-	fmt.Println("in precompiled contract digest", common.Bytes2Hex(digest))
-	fmt.Println("in precompiled contract sig", common.Bytes2Hex(sig))
 	publicKey, err := elaCrypto.DecodePoint(pubkey)
 	if err != nil {
 		return false32Byte, errP256VerifyInvalidPublicKey
 	}
 	err = elaCrypto.VerifyDigest(*publicKey, digest, sig)
 	if err != nil {
-		fmt.Println("in precompiled contract error", err)
 		return false32Byte, nil
 	}
-	fmt.Println("in precompiled contract valid")
 	return true32Byte, nil
 }
 
@@ -1688,7 +1683,6 @@ func (c *isProducer) Run(input []byte) ([]byte, error) {
 	// Extract producer public key (33 bytes)
 	producerPubKey := getData(input, 0, 33)
 	blockNumber := getData(input, 33, 32)
-	fmt.Println("in precompiled contract producerPubKey", common.Bytes2Hex(producerPubKey))
 	// Get Pbft engine from spv module
 	if spv.PbftEngine == nil {
 		log.Warn("checkProducerInactive: PbftEngine is nil")
@@ -1696,9 +1690,7 @@ func (c *isProducer) Run(input []byte) ([]byte, error) {
 	}
 	height := big.NewInt(0).SetBytes(blockNumber)
 	list := spv.PbftEngine.GetProducersByHeight(height.Uint64())
-	fmt.Println("in precompiled contract list", len(list))
 	for _, producer := range list {
-		fmt.Println("in precompiled contract producer", common.Bytes2Hex(producer))
 		if bytes.Equal(producer, producerPubKey) {
 			return true32Byte, nil
 		}
