@@ -378,20 +378,22 @@ func New(ctx *node.ServiceContext, config *Config, node *node.Node) (*Ethereum, 
 
 	// Inject in-process contract caller into BposValidator (BSC-style, avoids IPC "missing trie node" issue)
 	apiBackendForCaller := &EthAPIBackend{ctx.ExtRPCEnabled(), eth, nil}
-	ethAPI := ethapi.NewPublicBlockChainAPI(apiBackendForCaller)
 	engine.SetValidatorContractCaller(validators.NewEthAPICaller(
 		func(ctx2 context.Context, to common.Address, data []byte, blockNrOrHash rpc.BlockNumberOrHash) ([]byte, error) {
 			gas := hexutil.Uint64(uint64(math.MaxUint64 / 2))
 			msgData := hexutil.Bytes(data)
-			result, err := ethAPI.Call(ctx2, ethapi.CallArgs{
+			result, err := ethapi.DoCall(ctx2, apiBackendForCaller, ethapi.CallArgs{
 				Gas:  &gas,
 				To:   &to,
 				Data: &msgData,
-			}, blockNrOrHash, nil)
+			}, blockNrOrHash, nil, vm.Config{}, 30*time.Second, apiBackendForCaller.RPCGasCap())
 			if err != nil {
 				return nil, err
 			}
-			return result, nil
+			if len(result.Revert()) > 0 {
+				return nil, fmt.Errorf("execution reverted: %x", result.Revert())
+			}
+			return result.Return(), result.Err
 		},
 	))
 
