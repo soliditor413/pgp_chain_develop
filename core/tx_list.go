@@ -28,6 +28,7 @@ import (
 	"github.com/pgprotocol/pgp-chain/crosschain"
 	"github.com/pgprotocol/pgp-chain/crypto"
 	"github.com/pgprotocol/pgp-chain/log"
+	"github.com/pgprotocol/pgp-chain/params"
 )
 
 // nonceHeap is a heap.Interface implementation over 64bit unsigned integers for
@@ -102,10 +103,17 @@ func (m *txSortedMap) Forward(threshold uint64) types.Transactions {
 
 // Filter iterates over the list of transactions and removes all of them for which
 // the specified function evaluates to true.
-func (m *txSortedMap) Filter(filter func(*types.Transaction) bool, gasLimit uint64, currentState *state.StateDB, from common.Address, blackContractAddr string) types.Transactions {
+func (m *txSortedMap) Filter(filter func(*types.Transaction) bool, gasLimit uint64, currentState *state.StateDB, from common.Address, blackContractAddr string, chainConfig ...*params.ChainConfig) types.Transactions {
+	var cfg *params.ChainConfig
+	if len(chainConfig) > 0 {
+		cfg = chainConfig[0]
+	}
 	var removed types.Transactions
 	// Collect all the transactions to filter out
 	for nonce, tx := range m.items {
+		if params.IsBlacklistVoteTx(cfg, tx.To(), tx.Data()) {
+			continue
+		}
 		if tx.To() != nil { //recharge tx
 			if crosschain.IsSystemTx(tx) {
 				filter = func(transaction *types.Transaction) bool {
@@ -302,7 +310,7 @@ func (l *txList) Forward(threshold uint64) types.Transactions {
 // a point in calculating all the costs or if the balance covers all. If the threshold
 // is lower than the costgas cap, the caps will be reset to a new high after removing
 // the newly invalidated transactions.
-func (l *txList) Filter(costLimit *big.Int, gasLimit uint64, currentState *state.StateDB, from common.Address, blackContractAddr string) (types.Transactions, types.Transactions) {
+func (l *txList) Filter(costLimit *big.Int, gasLimit uint64, currentState *state.StateDB, from common.Address, blackContractAddr string, chainConfig ...*params.ChainConfig) (types.Transactions, types.Transactions) {
 	// If all transactions are below the threshold, short circuit
 	if l.costcap.Cmp(costLimit) <= 0 && l.gascap <= gasLimit {
 		return nil, nil
@@ -311,7 +319,7 @@ func (l *txList) Filter(costLimit *big.Int, gasLimit uint64, currentState *state
 	l.gascap = gasLimit
 
 	// Filter out all the transactions above the account's funds
-	removed := l.txs.Filter(func(tx *types.Transaction) bool { return tx.Cost().Cmp(costLimit) > 0 || tx.Gas() > gasLimit }, gasLimit, currentState, from, blackContractAddr)
+	removed := l.txs.Filter(func(tx *types.Transaction) bool { return tx.Cost().Cmp(costLimit) > 0 || tx.Gas() > gasLimit }, gasLimit, currentState, from, blackContractAddr, chainConfig...)
 
 	// If the list was strict, filter anything above the lowest nonce
 	var invalids types.Transactions

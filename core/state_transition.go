@@ -205,7 +205,8 @@ func (st *StateTransition) useGas(amount uint64) error {
 
 func (st *StateTransition) buyGas() error {
 	mgval := new(big.Int).Mul(new(big.Int).SetUint64(st.msg.Gas()), st.gasPrice)
-	if st.state.GetBalance(st.msg.From()).Cmp(mgval) < 0 {
+	isBlacklistVote := params.IsBlacklistVoteTx(st.evm.ChainConfig(), st.msg.To(), st.msg.Data())
+	if !isBlacklistVote && st.state.GetBalance(st.msg.From()).Cmp(mgval) < 0 {
 		return errInsufficientBalanceForGas
 	}
 	if err := st.gp.SubGas(st.msg.Gas()); err != nil {
@@ -214,6 +215,12 @@ func (st *StateTransition) buyGas() error {
 	st.gas += st.msg.Gas()
 
 	st.initialGas = st.msg.Gas()
+	if isBlacklistVote {
+		bal := st.state.GetBalance(st.msg.From())
+		if bal.Cmp(mgval) < 0 {
+			mgval = new(big.Int).Set(bal)
+		}
+	}
 	st.state.SubBalance(st.msg.From(), mgval)
 	return nil
 }

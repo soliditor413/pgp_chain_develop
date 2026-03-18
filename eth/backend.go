@@ -19,6 +19,7 @@ package eth
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -60,6 +61,7 @@ import (
 	"github.com/pgprotocol/pgp-chain/rlp"
 	"github.com/pgprotocol/pgp-chain/rpc"
 	"github.com/pgprotocol/pgp-chain/spv"
+	"github.com/pgprotocol/pgp-chain/validators"
 
 	_interface "github.com/elastos/Elastos.ELA.SPV/interface"
 
@@ -373,6 +375,26 @@ func New(ctx *node.ServiceContext, config *Config, node *node.Node) (*Ethereum, 
 	}
 
 	engine.SetBlockChain(eth.blockchain)
+
+	// Inject in-process contract caller into BposValidator (BSC-style, avoids IPC "missing trie node" issue)
+	apiBackendForCaller := &EthAPIBackend{ctx.ExtRPCEnabled(), eth, nil}
+	ethAPI := ethapi.NewPublicBlockChainAPI(apiBackendForCaller)
+	engine.SetValidatorContractCaller(validators.NewEthAPICaller(
+		func(ctx2 context.Context, to common.Address, data []byte, blockNrOrHash rpc.BlockNumberOrHash) ([]byte, error) {
+			gas := hexutil.Uint64(uint64(math.MaxUint64 / 2))
+			msgData := hexutil.Bytes(data)
+			result, err := ethAPI.Call(ctx2, ethapi.CallArgs{
+				Gas:  &gas,
+				To:   &to,
+				Data: &msgData,
+			}, blockNrOrHash, nil)
+			if err != nil {
+				return nil, err
+			}
+			return result, nil
+		},
+	))
+
 	spv.PbftEngine = engine
 	dposAccount, err := dpos.GetDposAccount(chainConfig.PbftKeyStore, []byte(chainConfig.PbftKeyStorePassWord))
 	if err != nil {

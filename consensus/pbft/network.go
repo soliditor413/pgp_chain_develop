@@ -172,7 +172,7 @@ func (p *Pbft) GetProducersByHeight(height uint64) [][]byte {
 		if height > currentHeight {
 			height = currentHeight
 		}
-		list, _, err := p.bPosValidator.GetNextValidatorSet(height)
+		list, _, err := p.bPosValidator.GetNextValidatorSetByNumber(height)
 		if err != nil {
 			log.Error("GetProducersByHeight bpos fork error", "error", err)
 		}
@@ -353,7 +353,7 @@ func (p *Pbft) OnInsertBlock(block *types.Block, isInit bool) bool {
 			return true
 		}
 	} else if p.bPosValidator.IsBPosFork(block.NumberU64()) {
-		producers, totalCount, err := p.bPosValidator.GetCurrentValidatorSet(block.NumberU64())
+		producers, totalCount, err := p.bPosValidator.GetCurrentValidatorSet(block.Hash(), block.NumberU64())
 		if err != nil {
 			log.Error("get dpos validator failed", "error", err)
 			return false

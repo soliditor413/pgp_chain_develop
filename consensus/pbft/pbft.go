@@ -553,7 +553,7 @@ func (p *Pbft) Prepare(chain consensus.ChainReader, header *types.Header) error 
 
 func (p *Pbft) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
 	uncles []*types.Header) {
-	dpos.Info("Pbft Finalize:", "height:", header.Number.Uint64())
+	dpos.Info("Pbft Finalize:", "height:", header.Number.Uint64(), "txs", len(txs))
 	sealHash := p.SealHash(header)
 	hash, _ := ecom.Uint256FromBytes(sealHash.Bytes())
 	p.dispatcher.FinishedProposal(header.Number.Uint64(), *hash, header.Time)
@@ -977,6 +977,13 @@ func (p *Pbft) IsProducer() bool {
 
 func (p *Pbft) SetBlockChain(chain *core.BlockChain) {
 	p.chain = chain
+}
+
+// SetValidatorContractCaller injects the in-process contract caller into BposValidator.
+func (p *Pbft) SetValidatorContractCaller(caller validators.ContractCaller) {
+	if p.bPosValidator != nil {
+		p.bPosValidator.SetContractCaller(caller)
+	}
 }
 
 func (p *Pbft) GetBlockChain() *core.BlockChain {

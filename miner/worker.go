@@ -19,6 +19,7 @@ package miner
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -949,7 +950,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 
 	// Fill the block with all available pending transactions.
 	pending, err := w.eth.TxPool().Pending()
-
+	fmt.Println("commitNewWork pending", len(pending))
 	if (!noempty && !isPbft) || (isPbft && len(pending) == 0) {
 		// Create an empty block based on temporary copied state for sealing in advance without waiting block
 		// execution finished.

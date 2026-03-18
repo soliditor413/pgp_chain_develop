@@ -10,7 +10,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
-	"fmt"
 	"path/filepath"
 	"sync"
 	"time"
@@ -27,7 +26,7 @@ const (
 	// InactiveThreshold is the number of consecutive blocks a producer must miss to be marked as inactive
 	InactiveThreshold uint64 = 20
 	// blacklistOpMinInterval 同一 producer 的添加/移除黑名单操作最小间隔，避免重复发送
-	blacklistOpMinInterval = 5 * time.Second
+	blacklistOpMinInterval = 8 * time.Second
 	// producerStatsDBName is the database name for storing producer statistics
 	producerStatsDBName    = "producer_stats"
 	blacklistDBPrefix      = "blacklist:"
@@ -332,59 +331,6 @@ func (ps *ProducerStats) recordBlacklistOpTime(producerKeys []string) {
 	for _, k := range producerKeys {
 		ps.lastBlacklistOpTime[k] = now
 	}
-}
-
-// addToBlacklist adds a producer to the blacklist
-func (ps *ProducerStats) addToBlacklist(producerKey string, lastSealHeight uint64, currentHeight uint64) {
-	ps.muOpTime.Lock()
-	if last, ok := ps.lastBlacklistOpTime[producerKey]; ok && time.Since(last) < blacklistOpMinInterval {
-		ps.muOpTime.Unlock()
-		log.Debug("Skip add blacklist: within min interval", "producer", producerKey)
-		return
-	}
-	ps.muOpTime.Unlock()
-
-	// Submit blacklist vote to contract (best-effort)
-	if err := ps.submitBlacklistVote(producerKey, lastSealHeight); err != nil {
-		log.Error("Submit blacklist vote failed",
-			"producer", producerKey,
-			"lastSealHeight", lastSealHeight,
-			"error", err)
-		return
-	}
-	ps.muOpTime.Lock()
-	ps.lastBlacklistOpTime[producerKey] = time.Now()
-	ps.muOpTime.Unlock()
-	log.Warn("Producer marked as inactive and submitted blacklist vote",
-		"producer", producerKey,
-		"lastSealHeight", lastSealHeight,
-		"height", currentHeight)
-}
-
-func (ps *ProducerStats) submitBlacklistVote(producerKey string, lastSealBlockHeight uint64) error {
-	if ps.blacklistOracle == nil {
-		return nil
-	}
-	targetPubKey := common.Hex2Bytes(producerKey)
-	if voted, err := ps.blacklistOracle.HasAddVoted(targetPubKey); voted || err != nil {
-		if err != nil {
-			return err
-		}
-		return fmt.Errorf("already submitted add vote for: %s", producerKey)
-	}
-	if expired, err := ps.blacklistOracle.IsExpired(targetPubKey); expired || err != nil {
-		if err != nil {
-			return err
-		}
-		return fmt.Errorf("blacklist expired for: %s", producerKey)
-	}
-	if res, err := ps.blacklistOracle.IsBlacklisted(targetPubKey); res == true || err != nil {
-		if err != nil {
-			return err
-		}
-		return fmt.Errorf("blacklisted : %s", producerKey)
-	}
-	return ps.blacklistOracle.SubmitBlacklistVote(producerKey, lastSealBlockHeight)
 }
 
 // trySubmitRemoveBlacklistVotes 对 snapshot 中的目标以及可选的 extraTargets 尝试提交移除黑名单投票（仅对已过期的提交）。
