@@ -643,7 +643,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	// If the transaction is already known, discard it
 	hash := tx.Hash()
 	if pool.all.Get(hash) != nil {
-		log.Warn("Discarding already known transaction", "hash", hash)
+		log.Trace("Discarding already known transaction", "hash", hash)
 		knownTxMeter.Mark(1)
 		return false, fmt.Errorf("known transaction: %x", hash)
 	}
@@ -1512,7 +1512,7 @@ func (pool *TxPool) demoteUnexecutables() {
 		for _, tx := range olds {
 			hash := tx.Hash()
 			pool.all.Remove(hash)
-			log.Info("Removed old pending transaction", "hash", hash)
+			log.Trace("Removed old pending transaction", "hash", hash)
 		}
 		// Drop all transactions that are too costly (low balance or out of gas), and queue any invalids back for later
 		drops, invalids := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas, pool.currentState, addr, pool.chainconfig.BlackContractAddr, pool.chainconfig)
@@ -1526,7 +1526,7 @@ func (pool *TxPool) demoteUnexecutables() {
 
 		for _, tx := range invalids {
 			hash := tx.Hash()
-			log.Info("Demoting pending transaction", "hash", hash)
+			log.Trace("Demoting pending transaction", "hash", hash)
 			pool.enqueueTx(hash, tx)
 		}
 		pendingGauge.Dec(int64(len(olds) + len(drops) + len(invalids)))

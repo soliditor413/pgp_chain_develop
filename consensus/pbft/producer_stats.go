@@ -24,7 +24,7 @@ import (
 
 const (
 	// InactiveThreshold is the number of consecutive blocks a producer must miss to be marked as inactive
-	InactiveThreshold uint64 = 20
+	InactiveThreshold uint64 = 1000
 	// blacklistOpMinInterval 同一 producer 的添加/移除黑名单操作最小间隔，避免重复发送
 	blacklistOpMinInterval = 8 * time.Second
 	// producerStatsDBName is the database name for storing producer statistics
