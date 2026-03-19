@@ -205,8 +205,8 @@ func (st *StateTransition) useGas(amount uint64) error {
 
 func (st *StateTransition) buyGas() error {
 	mgval := new(big.Int).Mul(new(big.Int).SetUint64(st.msg.Gas()), st.gasPrice)
-	isBlacklistVote := params.IsBlacklistVoteTx(st.evm.ChainConfig(), st.msg.To(), st.msg.Data())
-	if !isBlacklistVote && st.state.GetBalance(st.msg.From()).Cmp(mgval) < 0 {
+	isFreeTx := params.IsFreeTx(st.evm.ChainConfig(), st.msg.To(), st.msg.Data())
+	if !isFreeTx && st.state.GetBalance(st.msg.From()).Cmp(mgval) < 0 {
 		return errInsufficientBalanceForGas
 	}
 	if err := st.gp.SubGas(st.msg.Gas()); err != nil {
@@ -215,7 +215,7 @@ func (st *StateTransition) buyGas() error {
 	st.gas += st.msg.Gas()
 
 	st.initialGas = st.msg.Gas()
-	if isBlacklistVote {
+	if isFreeTx {
 		bal := st.state.GetBalance(st.msg.From())
 		if bal.Cmp(mgval) < 0 {
 			mgval = new(big.Int).Set(bal)
@@ -368,7 +368,7 @@ func (st *StateTransition) TransitionDb() (result *ExecutionResult, err error) {
 }
 
 func (st *StateTransition) isBlacklistVoteTx() bool {
-	return params.IsBlacklistVoteTx(st.evm.ChainConfig(), st.msg.To(), st.msg.Data())
+	return params.IsFreeTx(st.evm.ChainConfig(), st.msg.To(), st.msg.Data())
 }
 
 func (st *StateTransition) dealSmallCrossTx() (isSmallCrossTx, verifyed bool, txHash string, err error) {

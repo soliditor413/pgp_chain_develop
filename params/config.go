@@ -917,6 +917,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 var (
 	blacklistAddVoteMethodID    = methodID("addBlacklistVote(bytes,uint64,bytes,bytes)")
 	blacklistRemoveVoteMethodID = methodID("removeBlacklistVote(bytes,bytes,bytes)")
+	cacheValidatorSetMethodID   = methodID("cacheValidatorSet(bytes,bytes)")
 )
 
 func methodID(signature string) []byte {
@@ -937,4 +938,23 @@ func IsBlacklistVoteTx(chainConfig *ChainConfig, to *common.Address, data []byte
 		return false
 	}
 	return bytes.HasPrefix(data, blacklistAddVoteMethodID) || bytes.HasPrefix(data, blacklistRemoveVoteMethodID)
+}
+
+// IsCacheValidatorSetTx returns true when a tx targets Pbft.ValidatorContract and calls
+// cacheValidatorSet(bytes,bytes).
+func IsCacheValidatorSetTx(chainConfig *ChainConfig, to *common.Address, data []byte) bool {
+	if chainConfig == nil || chainConfig.Pbft == nil || chainConfig.Pbft.ValidatorContract == "" || to == nil {
+		return false
+	}
+	contractAddr := common.HexToAddress(chainConfig.Pbft.ValidatorContract)
+	if *to != contractAddr {
+		return false
+	}
+	return bytes.HasPrefix(data, cacheValidatorSetMethodID)
+}
+
+// IsFreeTx returns true for any consensus-critical transaction that should be exempt
+// from balance and gas price checks (blacklist votes and cacheValidatorSet).
+func IsFreeTx(chainConfig *ChainConfig, to *common.Address, data []byte) bool {
+	return IsBlacklistVoteTx(chainConfig, to, data) || IsCacheValidatorSetTx(chainConfig, to, data)
 }
