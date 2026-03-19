@@ -56,4 +56,4 @@ oracle/package.json
 .gocache/
 BlacklistManager.sol
 IBlacklistManager.sol
-minerManager/
+MinerManager.sol
