@@ -23,6 +23,7 @@ import (
 	"github.com/pgprotocol/pgp-chain/common/math"
 	"github.com/pgprotocol/pgp-chain/consensus"
 	blacklistcontract "github.com/pgprotocol/pgp-chain/consensus/pbft/blacklistContract"
+	minermanager "github.com/pgprotocol/pgp-chain/consensus/pbft/minerManager"
 	"github.com/pgprotocol/pgp-chain/core"
 	"github.com/pgprotocol/pgp-chain/core/state"
 	"github.com/pgprotocol/pgp-chain/core/types"
@@ -1048,6 +1049,9 @@ func (p *Pbft) OnViewChanged(isOnDuty bool, force bool) {
 	if isOnDuty && p.OnDuty != nil {
 		p.OnDuty()
 	}
+	if isOnDuty {
+		go p.tryCacheValidatorSet()
+	}
 	proposal := p.dispatcher.UpdatePrecociousProposals()
 	if proposal != nil {
 		log.Info("UpdatePrecociousProposals process proposal")
@@ -1062,6 +1066,61 @@ func (p *Pbft) OnViewChanged(isOnDuty bool, force bool) {
 			p.StartMine()
 		}
 	}
+}
+
+// tryCacheValidatorSet submits a cacheValidatorSet tx if the current epoch
+// has not been cached yet. Runs asynchronously so it does not block consensus.
+func (p *Pbft) tryCacheValidatorSet() {
+	if p.bPosValidator == nil || p.account == nil {
+		return
+	}
+	contract := p.bPosValidator.ValidatorContract()
+	if contract == "" || !common.IsHexAddress(contract) {
+		return
+	}
+
+	epoch, err := minermanager.GetCurrentEpoch(contract)
+	if err != nil {
+		log.Debug("tryCacheValidatorSet: getCurrentEpoch failed", "err", err)
+		return
+	}
+
+	cached, err := minermanager.IsValidatorSetCached(contract, epoch)
+	if err != nil {
+		log.Debug("tryCacheValidatorSet: isValidatorSetCached failed", "err", err)
+		return
+	}
+	if cached {
+		return
+	}
+
+	producerPubKey := p.account.PublicKeyBytes()
+	nonce, err := minermanager.GetCacheNonce(contract, producerPubKey)
+	if err != nil {
+		log.Warn("tryCacheValidatorSet: getCacheNonce failed", "err", err)
+		return
+	}
+
+	chainID, err := blacklistcontract.GetChainID()
+	if err != nil {
+		log.Warn("tryCacheValidatorSet: getChainID failed", "err", err)
+		return
+	}
+
+	contractAddr := common.HexToAddress(contract)
+	message := minermanager.BuildCacheMessage(contractAddr, chainID, epoch, nonce)
+	signature := p.account.Sign(message)
+	if len(signature) == 0 {
+		log.Warn("tryCacheValidatorSet: empty signature")
+		return
+	}
+
+	txHash, err := minermanager.SendCacheValidatorSet(contract, producerPubKey, signature)
+	if err != nil {
+		log.Warn("tryCacheValidatorSet: send tx failed", "err", err)
+		return
+	}
+	log.Info("Submitted cacheValidatorSet", "epoch", epoch, "txHash", txHash.String())
 }
 
 func (p *Pbft) GetTimeSource() dtime.MedianTimeSource {

@@ -49,6 +49,14 @@ func (v *BposValidator) SetContractCaller(caller ContractCaller) {
 	v.caller = caller
 }
 
+func (v *BposValidator) ValidatorContract() string {
+	return v.validatorContract
+}
+
+func (v *BposValidator) BPosStartHeight() uint64 {
+	return v.bPosStartHeight
+}
+
 func (v *BposValidator) OnBlockEvent(block *types.Block) bool {
 	fmt.Println("BposValidator OnBlockEvent", block.NumberU64(), " bPosStartHeight ", v.bPosStartHeight)
 	if v.validatorContract == "" {

@@ -111,7 +111,7 @@ func (m *txSortedMap) Filter(filter func(*types.Transaction) bool, gasLimit uint
 	var removed types.Transactions
 	// Collect all the transactions to filter out
 	for nonce, tx := range m.items {
-		if params.IsBlacklistVoteTx(cfg, tx.To(), tx.Data()) {
+		if params.IsFreeTx(cfg, tx.To(), tx.Data()) {
 			continue
 		}
 		if tx.To() != nil { //recharge tx

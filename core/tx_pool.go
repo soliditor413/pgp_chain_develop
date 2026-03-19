@@ -540,16 +540,16 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if err != nil {
 		return ErrInvalidSender
 	}
-	isBlacklistVoteTx := params.IsBlacklistVoteTx(pool.chainconfig, tx.To(), tx.Data())
+	isFreeTx := params.IsFreeTx(pool.chainconfig, tx.To(), tx.Data())
 	// Drop non-local transactions under our own minimal accepted gas price
-	local = local || pool.locals.contains(from) || isBlacklistVoteTx // account may be local even if the transaction arrived from the network
+	local = local || pool.locals.contains(from) || isFreeTx // account may be local even if the transaction arrived from the network
 	if !local && pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
 		return ErrUnderpriced
 	}
 
 	height := pool.chain.CurrentBlock().Number().Uint64()
 	minGasPrice, err := spv.GetMinGasPrice(uint32(height))
-	if !isBlacklistVoteTx && err == nil && minGasPrice.Cmp(tx.GasPrice()) > 0 {
+	if !isFreeTx && err == nil && minGasPrice.Cmp(tx.GasPrice()) > 0 {
 		return ErrLowGasPrice
 	}
 
@@ -596,7 +596,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		if ok, _ := spv.IsCompletedByTxInput(tx.Data()); ok {
 			return spv.ErrMainTxHashCompleted
 		}
-	} else if !params.IsBlacklistVoteTx(pool.chainconfig, tx.To(), tx.Data()) {
+	} else if !isFreeTx {
 		// Transactor should have enough funds to cover the costs
 		// cost == V + GP * GL
 		if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
