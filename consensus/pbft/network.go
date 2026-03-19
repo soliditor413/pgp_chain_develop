@@ -23,6 +23,7 @@ import (
 	"github.com/pgprotocol/pgp-chain/rlp"
 	"github.com/pgprotocol/pgp-chain/smallcrosstx"
 	"github.com/pgprotocol/pgp-chain/spv"
+	"github.com/pgprotocol/pgp-chain/validators"
 	"github.com/pgprotocol/pgp-chain/withdrawfailedtx"
 
 	elacom "github.com/elastos/Elastos.ELA/common"
@@ -172,9 +173,17 @@ func (p *Pbft) GetProducersByHeight(height uint64) [][]byte {
 		if height > currentHeight {
 			height = currentHeight
 		}
-		list, _, err := p.bPosValidator.GetNextValidatorSetByNumber(height)
+		epoch := (height - p.bPosValidator.BPosStartHeight()) / validators.BLOCKS_PER_EPOCH
+		// Try on-chain cache first (reads latest state, immune to pruning).
+		list, _, err := p.bPosValidator.GetCachedValidatorSet(epoch)
+		if err == nil && len(list) > 0 {
+			return list
+		}
+		// Fall back to historical state query.
+		list, _, err = p.bPosValidator.GetNextValidatorSetByNumber(height)
 		if err != nil {
 			log.Error("GetProducersByHeight bpos fork error", "error", err)
+			return p.dispatcher.GetConsensusView().GetProducers()
 		}
 		return list
 	} else {

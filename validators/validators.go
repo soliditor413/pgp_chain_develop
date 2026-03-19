@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"strings"
 
 	"github.com/elastos/Elastos.ELA/events"
@@ -17,7 +18,7 @@ import (
 	"github.com/pgprotocol/pgp-chain/rpc"
 )
 
-const validatorABI = `[{"inputs":[],"name":"getNextValidatorSet","outputs":[{"internalType":"bytes[]","name":"validators","type":"bytes[]"},{"internalType":"uint8","name":"totalValidatorsCount","type":"uint8"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"getEpoch0Validators","outputs":[{"internalType":"bytes[]","name":"validators","type":"bytes[]"},{"internalType":"uint8","name":"totalValidatorsCount","type":"uint8"}],"stateMutability":"view","type":"function"}]`
+const validatorABI = `[{"inputs":[],"name":"getNextValidatorSet","outputs":[{"internalType":"bytes[]","name":"validators","type":"bytes[]"},{"internalType":"uint8","name":"totalValidatorsCount","type":"uint8"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"epoch","type":"uint256"}],"name":"getCachedValidatorSet","outputs":[{"internalType":"bytes[]","name":"validators","type":"bytes[]"},{"internalType":"uint8","name":"totalValidatorsCount","type":"uint8"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"epoch","type":"uint256"}],"name":"isValidatorSetCached","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"}]`
 const BLOCKS_PER_EPOCH = 18 //TODO test for jianbin,should change to 36
 
 // ContractCaller abstracts contract call capability so that BposValidator
@@ -71,15 +72,15 @@ func (v *BposValidator) OnBlockEvent(block *types.Block) bool {
 			return false
 		}
 	}
-	validators := make([][]byte, 0)
-	totalCount := uint8(0)
-	var err error
-	if block.NumberU64() < v.bPosStartHeight && block.NumberU64() > v.bPosStartHeight-BLOCKS_PER_EPOCH {
-		validators, totalCount, err = v.GetEpoch0Validators(block.Hash())
-	} else {
+	epoch := uint64(0)
+	if block.NumberU64() >= v.bPosStartHeight {
+		epoch = (block.NumberU64() - v.bPosStartHeight) / BLOCKS_PER_EPOCH
+	}
+	// Try on-chain cache first (at latest state), then fall back to block hash state.
+	validators, totalCount, err := v.GetCachedValidatorSet(epoch)
+	if err != nil || len(validators) == 0 {
 		validators, totalCount, err = v.GetNextValidatorSet(block.Hash())
 	}
-
 	if err != nil {
 		log.Error("OnBlockEvent", "getCurrentValidators error", err)
 		return false
@@ -146,17 +147,22 @@ func (v *BposValidator) GetCurrentValidatorSet(blockHash common.Hash, height uin
 	}
 	epoch := (height - v.bPosStartHeight) / BLOCKS_PER_EPOCH
 	fmt.Println(">>>>>>>>>>> GetCurrentValidatorSet <<<<<<<<<<< epoch ", epoch)
-	if epoch == 0 {
-		return v.GetEpoch0Validators(blockHash)
-	}
-	// For non-zero epoch we need the state at (height - BLOCKS_PER_EPOCH).
-	// We don't have that block's hash here, so fall back to block number query.
-	return v.getValidatorsByNumber("getNextValidatorSet", height-BLOCKS_PER_EPOCH)
-}
 
-// GetEpoch0Validators queries the contract at the given block hash.
-func (v *BposValidator) GetEpoch0Validators(blockHash common.Hash) ([][]byte, uint8, error) {
-	return v.callValidatorContract("getEpoch0Validators", blockHash)
+	// Try reading from the contract's on-chain cache at the latest block first.
+	// The cache is written by cacheValidatorSet() and only exists in the latest state,
+	// so we query at "latest" to avoid the missing-trie-node issue with pruned historical state.
+	validators, count, err := v.GetCachedValidatorSet(epoch)
+	if err == nil && len(validators) > 0 {
+		log.Debug("GetCurrentValidatorSet: using on-chain cache", "epoch", epoch)
+		return validators, count, nil
+	}
+
+	// Cache miss — fall back to querying at the historical block number.
+	queryHeight := height
+	if epoch > 0 {
+		queryHeight = height - BLOCKS_PER_EPOCH
+	}
+	return v.getValidatorsByNumber("getNextValidatorSet", queryHeight)
 }
 
 // GetNextValidatorSet queries the contract at the given block hash.
@@ -242,6 +248,42 @@ func (v *BposValidator) getValidatorsByNumber(method string, height uint64) ([][
 	}
 	if err := contractABI.UnpackIntoInterface(&resp, method, output); err != nil {
 		return nil, 0, err
+	}
+	return resp.Validators, resp.TotalValidatorsCount, nil
+}
+
+// GetCachedValidatorSet queries the contract's getCachedValidatorSet(epoch) at the latest block.
+// Returns the cached validator set if available, or an error if not cached / call fails.
+func (v *BposValidator) GetCachedValidatorSet(epoch uint64) ([][]byte, uint8, error) {
+	if v.caller == nil {
+		return nil, 0, errors.New("contract caller is not configured")
+	}
+	contractABI, err := abi.JSON(strings.NewReader(validatorABI))
+	if err != nil {
+		return nil, 0, err
+	}
+	data, err := contractABI.Pack("getCachedValidatorSet", new(big.Int).SetUint64(epoch))
+	if err != nil {
+		return nil, 0, err
+	}
+	contractAddr := common.HexToAddress(v.validatorContract)
+	blockNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+	output, err := v.caller.Call(context.Background(), contractAddr, data, blockNrOrHash)
+	if err != nil {
+		return nil, 0, fmt.Errorf("getCachedValidatorSet call failed for epoch %d: %w", epoch, err)
+	}
+	if len(output) == 0 {
+		return nil, 0, fmt.Errorf("empty response from getCachedValidatorSet for epoch %d", epoch)
+	}
+	var resp struct {
+		Validators           [][]byte
+		TotalValidatorsCount uint8
+	}
+	if err := contractABI.UnpackIntoInterface(&resp, "getCachedValidatorSet", output); err != nil {
+		return nil, 0, err
+	}
+	if len(resp.Validators) == 0 {
+		return nil, 0, fmt.Errorf("no cached validators for epoch %d", epoch)
 	}
 	return resp.Validators, resp.TotalValidatorsCount, nil
 }
