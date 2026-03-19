@@ -1049,7 +1049,7 @@ func (p *Pbft) OnViewChanged(isOnDuty bool, force bool) {
 	if isOnDuty && p.OnDuty != nil {
 		p.OnDuty()
 	}
-	if isOnDuty {
+	if isOnDuty && p.IsCurrent != nil && p.IsCurrent() {
 		go p.tryCacheValidatorSet()
 	}
 	proposal := p.dispatcher.UpdatePrecociousProposals()
