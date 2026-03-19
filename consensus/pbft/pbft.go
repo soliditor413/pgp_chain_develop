@@ -120,6 +120,7 @@ type Pbft struct {
 
 	requestedBlocks    map[common.Hash]struct{}
 	requestedProposals map[ecom.Uint256]struct{}
+	statusMapMu        sync.RWMutex
 	statusMap          map[uint32]map[string]*dmsg.ConsensusStatus
 	notHandledProposal map[string]struct{}
 
