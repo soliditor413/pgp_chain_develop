@@ -477,6 +477,8 @@ func (p *Pbft) OnResponseConsensus(id peer.PID, status *dmsg.ConsensusStatus) {
 	if !p.recoverStarted {
 		return
 	}
+	p.statusMapMu.Lock()
+	defer p.statusMapMu.Unlock()
 	if p.statusMap[status.ViewOffset][common.Bytes2Hex(id[:])] != nil {
 		return
 	}
@@ -691,9 +693,11 @@ func (p *Pbft) recoverAbnormalState() bool {
 		go func() {
 			for {
 				var count int
+				p.statusMapMu.RLock()
 				for _, v := range p.statusMap {
 					count += len(v)
 				}
+				p.statusMapMu.RUnlock()
 				if count > minCount {
 					p.OnRecoverTimeout()
 					break
@@ -712,11 +716,13 @@ func (p *Pbft) recoverAbnormalState() bool {
 
 func (p *Pbft) OnRecoverTimeout() {
 	if p.recoverStarted == true {
+		p.statusMapMu.Lock()
 		if len(p.statusMap) != 0 {
-			p.DoRecover()
+			p.doRecoverLocked()
 		}
-		p.recoverStarted = false
 		p.statusMap = make(map[uint32]map[string]*dmsg.ConsensusStatus)
+		p.statusMapMu.Unlock()
+		p.recoverStarted = false
 	}
 
 	p.isRecoved = true
@@ -726,6 +732,13 @@ func (p *Pbft) OnRecoverTimeout() {
 }
 
 func (p *Pbft) DoRecover() {
+	p.statusMapMu.RLock()
+	defer p.statusMapMu.RUnlock()
+	p.doRecoverLocked()
+}
+
+// doRecoverLocked must be called with statusMapMu held (read or write).
+func (p *Pbft) doRecoverLocked() {
 	var maxCountMaxViewOffset uint32
 	for k := range p.statusMap {
 		if maxCountMaxViewOffset < k {
