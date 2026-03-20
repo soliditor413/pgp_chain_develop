@@ -17,8 +17,6 @@ type ContractBlacklistOracle struct {
 	voterPubKey []byte
 	signer      func([]byte) []byte
 	voteMu      sync.Mutex
-	listenerMu  sync.Mutex
-	listener    *BlacklistEventListener
 }
 
 // NewContractBlacklistOracle creates a blacklist oracle for the blacklist contract.
@@ -226,39 +224,6 @@ func (o *ContractBlacklistOracle) IsExpired(dposPublicKey []byte) (bool, error) 
 		return false, nil
 	}
 	return IsBlacklistExpired(o.contract, dposPublicKey)
-}
-
-// StartListener subscribes to blacklist contract events.
-func (o *ContractBlacklistOracle) StartListener(onConfirmed func([]byte), onRemoved func([]byte), getScannedHeight func() uint64, setScannedHeight func(uint64)) error {
-	if o == nil || o.contract == "" {
-		return nil
-	}
-	o.listenerMu.Lock()
-	defer o.listenerMu.Unlock()
-
-	if o.listener != nil {
-		o.listener.Stop()
-	}
-	listener := NewBlacklistEventListener(o.contract, onConfirmed, onRemoved, getScannedHeight, setScannedHeight)
-	if err := listener.Start(); err != nil {
-		return err
-	}
-	o.listener = listener
-	return nil
-}
-
-// StopListener stops the blacklist contract event subscription.
-func (o *ContractBlacklistOracle) StopListener() {
-	if o == nil {
-		return
-	}
-	o.listenerMu.Lock()
-	defer o.listenerMu.Unlock()
-
-	if o.listener != nil {
-		o.listener.Stop()
-		o.listener = nil
-	}
 }
 
 func buildAddBlacklistVoteMessage(contractAddr common.Address, chainID *big.Int, dposPublicKey []byte, lastSealBlockHeight uint64, nonce *big.Int) []byte {
