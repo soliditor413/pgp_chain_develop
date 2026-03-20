@@ -233,8 +233,8 @@ func (v *BposValidator) getValidatorsByNumber(method string, height uint64) ([][
 		return nil, 0, err
 	}
 	contractAddr := common.HexToAddress(v.validatorContract)
-	blockNr := rpc.BlockNumber(height)
-	blockNrOrHash := rpc.BlockNumberOrHashWithNumber(blockNr)
+	// blockNr := rpc.BlockNumber(height)
+	blockNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber) //// rpc.BlockNumberOrHashWithNumber(blockNr)
 	output, err := v.caller.Call(context.Background(), contractAddr, data, blockNrOrHash)
 	if err != nil {
 		return nil, 0, fmt.Errorf("%s call failed at height %d: %w", method, height, err)
