@@ -151,9 +151,18 @@ func (v *BposValidator) GetCurrentValidatorSet(blockHash common.Hash, height uin
 	// Try reading from the contract's on-chain cache at the latest block first.
 	// The cache is written by cacheValidatorSet() and only exists in the latest state,
 	// so we query at "latest" to avoid the missing-trie-node issue with pruned historical state.
+
+	if (height-v.bPosStartHeight)%BLOCKS_PER_EPOCH == 0 && epoch > 0 {
+		epoch = epoch - 1
+		fmt.Println("GetCurrentValidatorSet: using on-chain previous epoch cache", "epoch", epoch)
+	}
+	// INSERT_YOUR_CODE
+	if !v.isValidatorSetCached(epoch) {
+		return nil, 0, fmt.Errorf("validator set for epoch %d is not cached", epoch)
+	}
+
 	validators, count, err := v.GetCachedValidatorSet(epoch)
 	if err == nil && len(validators) > 0 {
-		log.Debug("GetCurrentValidatorSet: using on-chain cache", "epoch", epoch)
 		return validators, count, nil
 	}
 
@@ -286,6 +295,34 @@ func (v *BposValidator) GetCachedValidatorSet(epoch uint64) ([][]byte, uint8, er
 		return nil, 0, fmt.Errorf("no cached validators for epoch %d", epoch)
 	}
 	return resp.Validators, resp.TotalValidatorsCount, nil
+}
+
+// isValidatorSetCached queries isValidatorSetCached(epoch) on the contract at the latest block.
+func (v *BposValidator) isValidatorSetCached(epoch uint64) bool {
+	if v.caller == nil {
+		return false
+	}
+	contractABI, err := abi.JSON(strings.NewReader(validatorABI))
+	if err != nil {
+		return false
+	}
+	data, err := contractABI.Pack("isValidatorSetCached", new(big.Int).SetUint64(epoch))
+	if err != nil {
+		return false
+	}
+	contractAddr := common.HexToAddress(v.validatorContract)
+	blockNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+	output, err := v.caller.Call(context.Background(), contractAddr, data, blockNrOrHash)
+	if err != nil {
+		return false
+	}
+	var result struct {
+		Cached bool
+	}
+	if err := contractABI.UnpackIntoInterface(&result, "isValidatorSetCached", output); err != nil {
+		return false
+	}
+	return result.Cached
 }
 
 // EthAPICaller implements ContractCaller using ethapi.PublicBlockChainAPI.
