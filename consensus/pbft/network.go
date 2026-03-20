@@ -313,8 +313,14 @@ func (p *Pbft) OnInsertBlock(block *types.Block, isInit bool) bool {
 			if err == nil && producerPubKey != nil {
 				p.producerStats.RecordParticipation(producerPubKey, block.NumberU64(), block.Time())
 			}
-			// Update block height and check for inactive producers
-			// Get current producers list
+
+			// Synchronously process blacklist events from this block's receipts.
+			if p.chain != nil {
+				if receipts := p.chain.GetReceiptsByHash(block.Hash()); receipts != nil {
+					p.producerStats.ProcessBlockBlacklistEvents(receipts)
+				}
+			}
+
 			currentProducers := p.GetCurrentProducers()
 			p.producerStats.UpdateBlockHeight(block.NumberU64(), block.Time(), currentProducers)
 		}

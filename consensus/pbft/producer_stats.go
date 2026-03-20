@@ -16,6 +16,7 @@ import (
 
 	"github.com/elastos/Elastos.ELA/core/types/payload"
 	"github.com/pgprotocol/pgp-chain/common"
+	blacklistcontract "github.com/pgprotocol/pgp-chain/consensus/pbft/blacklistContract"
 	"github.com/pgprotocol/pgp-chain/core/types"
 	"github.com/pgprotocol/pgp-chain/ethdb"
 	"github.com/pgprotocol/pgp-chain/ethdb/leveldb"
@@ -28,9 +29,8 @@ const (
 	// blacklistOpMinInterval 同一 producer 的添加/移除黑名单操作最小间隔，避免重复发送
 	blacklistOpMinInterval = 8 * time.Second
 	// producerStatsDBName is the database name for storing producer statistics
-	producerStatsDBName    = "producer_stats"
-	blacklistDBPrefix      = "blacklist:"
-	blacklistScanHeightKey = "blacklistScanHeight"
+	producerStatsDBName = "producer_stats"
+	blacklistDBPrefix   = "blacklist:"
 )
 
 // dbInterface combines the interfaces we need for persistence
@@ -49,9 +49,9 @@ type ProducerStats struct {
 	lastBlockHeight          map[string]uint64   // key: producer public key (hex), value: last block height
 	consecutiveMissedBlocks  map[string]uint64   // key: producer public key (hex), value: consecutive missed blocks
 	confirmedBlacklist       map[string]struct{} // key: producer public key (hex)
-	blacklistScannedHeight   uint64
-	lastProcessedBlockHeight uint64    // last processed block height to avoid duplicate processing
-	currentBlockTime         time.Time // last seen block time (from chain)
+	blacklistContract        string              // blacklist contract address (hex)
+	lastProcessedBlockHeight uint64              // last processed block height to avoid duplicate processing
+	currentBlockTime         time.Time           // last seen block time (from chain)
 	blacklistOracle          BlacklistOracle
 	// 同一 producer 添加/移除黑名单操作节流：上次操作时间
 	muOpTime            sync.Mutex
@@ -100,29 +100,15 @@ func NewProducerStats(dataDir string) (*ProducerStats, error) {
 // ConfigureBlacklist sets the oracle used for blacklist votes.
 func (ps *ProducerStats) ConfigureBlacklist(oracle BlacklistOracle) {
 	ps.mu.Lock()
-	oldOracle := ps.blacklistOracle
 	ps.blacklistOracle = oracle
 	ps.mu.Unlock()
-
-	if oldOracle != nil {
-		oldOracle.StopListener()
-	}
-	if oracle != nil {
-		if err := oracle.StartListener(ps.onBlacklistConfirmed, ps.onBlacklistRemoved, ps.getBlacklistScannedHeight, ps.setBlacklistScannedHeight); err != nil {
-			log.Error("Failed to start blacklist listener", "error", err)
-		}
-	}
 }
 
 // Close closes the database connection
 func (ps *ProducerStats) Close() error {
 	ps.mu.Lock()
-	oracle := ps.blacklistOracle
 	ps.blacklistOracle = nil
 	ps.mu.Unlock()
-	if oracle != nil {
-		oracle.StopListener()
-	}
 	if ps.db != nil {
 		if closer, ok := ps.db.(interface{ Close() error }); ok {
 			return closer.Close()
@@ -157,6 +143,42 @@ func (ps *ProducerStats) RecordParticipation(producerPubKey []byte, blockHeight 
 
 	// Save to database
 	ps.saveProducerToDB(producerKey)
+}
+
+// ProcessBlockBlacklistEvents parses blacklist contract events from the block's
+// receipts and updates confirmedBlacklist synchronously. This keeps the blacklist
+// state in lockstep with chain processing, unlike the old async listener approach.
+func (ps *ProducerStats) ProcessBlockBlacklistEvents(receipts types.Receipts) {
+	if ps.blacklistContract == "" || len(receipts) == 0 {
+		return
+	}
+	events := blacklistcontract.ParseBlacklistEvents(ps.blacklistContract, receipts)
+	if len(events) == 0 {
+		return
+	}
+	for _, ev := range events {
+		if ev.LogRemoved {
+			// Reorged log — treat as the opposite action.
+			if ev.IsConfirmed {
+				ps.onBlacklistRemoved(ev.DposPublicKey)
+			} else {
+				ps.onBlacklistConfirmed(ev.DposPublicKey)
+			}
+		} else {
+			if ev.IsConfirmed {
+				ps.onBlacklistConfirmed(ev.DposPublicKey)
+			} else {
+				ps.onBlacklistRemoved(ev.DposPublicKey)
+			}
+		}
+	}
+}
+
+// SetBlacklistContract sets the blacklist contract address for event parsing.
+func (ps *ProducerStats) SetBlacklistContract(contract string) {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	ps.blacklistContract = contract
 }
 
 // GetParticipationInfo returns detailed participation information for a producer
@@ -484,10 +506,6 @@ func (ps *ProducerStats) loadFromDB() error {
 	if value, err := ps.db.Get(key); err == nil && len(value) == 8 {
 		ps.lastProcessedBlockHeight = binary.BigEndian.Uint64(value)
 	}
-	if value, err := ps.db.Get([]byte(blacklistScanHeightKey)); err == nil && len(value) == 8 {
-		ps.blacklistScannedHeight = binary.BigEndian.Uint64(value)
-	}
-
 	// Iterate through all keys with prefix "producer:"
 	prefix := []byte("producer:")
 	it := ps.db.NewIteratorWithPrefix(prefix)
@@ -573,29 +591,6 @@ func (ps *ProducerStats) snapshotRemoveVoteTargets() []blacklistVoteTarget {
 		})
 	}
 	return targets
-}
-
-func (ps *ProducerStats) getBlacklistScannedHeight() uint64 {
-	ps.mu.RLock()
-	defer ps.mu.RUnlock()
-	return ps.blacklistScannedHeight
-}
-
-func (ps *ProducerStats) setBlacklistScannedHeight(height uint64) {
-	ps.mu.Lock()
-	defer ps.mu.Unlock()
-	if height <= ps.blacklistScannedHeight {
-		return
-	}
-	ps.blacklistScannedHeight = height
-	if ps.db == nil {
-		return
-	}
-	value := make([]byte, 8)
-	binary.BigEndian.PutUint64(value, height)
-	if err := ps.db.Put([]byte(blacklistScanHeightKey), value); err != nil {
-		log.Error("Failed to save blacklist scanned height", "height", height, "error", err)
-	}
 }
 
 // extractProducerFromBlock extracts the producer public key from a block's confirm

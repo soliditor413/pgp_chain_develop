@@ -225,8 +225,8 @@ func New(chainConfig *params.ChainConfig, dataDir string) *Pbft {
 			return nil
 		}
 		pbft.network = network
-		pbft.subscribeEvent()
 	}
+	pbft.subscribeEvent()
 	tolerance := time.Duration(blockPeriod) * 2 * time.Second
 	pbft.dispatcher = dpos.NewDispatcher(producers, pbft.onConfirm, pbft.onUnConfirm,
 		tolerance, accpubkey, medianTimeSouce, pbft, chainConfig.GetPbftBlock())
@@ -239,6 +239,7 @@ func New(chainConfig *params.ChainConfig, dataDir string) *Pbft {
 		producerStats, _ = NewProducerStats("")
 	}
 	if cfg.BlacklistContract != "" {
+		producerStats.SetBlacklistContract(cfg.BlacklistContract)
 		if account == nil {
 			log.Warn("Blacklist contract configured but dpos account is nil")
 		} else {
@@ -270,9 +271,14 @@ func (p *Pbft) subscribeEvent() {
 	events.Subscribe(func(e *events.Event) {
 		switch e.Type {
 		case events.ETDirectPeersChanged:
-			peersInfo := e.Data.(*peer.PeersInfo)
-			go p.network.UpdatePeers(peersInfo.CurrentPeers, peersInfo.NextPeers)
+			if p.network != nil {
+				peersInfo := e.Data.(*peer.PeersInfo)
+				go p.network.UpdatePeers(peersInfo.CurrentPeers, peersInfo.NextPeers)
+			}
 		case dpos.ETNewPeer:
+			if p.network == nil {
+				break
+			}
 			count := len(p.network.GetActivePeers())
 			log.Info("new peer accept", "active peer count", count)
 			height := p.chain.CurrentHeader().Number.Uint64()
