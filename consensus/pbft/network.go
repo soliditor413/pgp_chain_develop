@@ -378,7 +378,7 @@ func (p *Pbft) OnInsertBlock(block *types.Block, isInit bool) bool {
 			return false
 		}
 		fmt.Println(">>>>>>>>>>> OnInsertBlock update current producers GetCurrentValidatorSet <<<<<<<<<<<<", "totalCount ", totalCount)
-		if p.bPosValidator.IsWorkingHeight(block.NumberU64()) {
+		if p.bPosValidator.IsWorkingHeight(block.NumberU64()) || isInit {
 			fmt.Println("is working height")
 			p.UpdateCurrentProducers(producers, int(totalCount), 0)
 		} else {
