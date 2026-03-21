@@ -451,6 +451,7 @@ func (ps *ProducerStats) onBlacklistRemoved(dposPublicKey []byte) {
 
 	producerKey := common.Bytes2Hex(dposPublicKey)
 	ps.deleteConfirmedBlacklist(producerKey)
+	log.Info("removed from blacklist", "producer:", producerKey)
 	ps.consecutiveMissedBlocks[producerKey] = 0
 }
 

@@ -158,7 +158,7 @@ func (v *BposValidator) GetCurrentValidatorSet(blockHash common.Hash, height uin
 	}
 	// INSERT_YOUR_CODE
 	if !v.isValidatorSetCached(epoch) {
-		return nil, 0, fmt.Errorf("validator set for epoch %d is not cached", epoch)
+		epoch = epoch - 1
 	}
 
 	validators, count, err := v.GetCachedValidatorSet(epoch)
