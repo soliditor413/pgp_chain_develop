@@ -167,6 +167,85 @@ func (p *Pbft) UpdateCurrentProducers(producers [][]byte, totalCount int, spvHei
 	spv.SetCurrentProducers(producers)
 }
 
+// InitCurrentProducersFromChain refreshes the in-memory current producers from
+// the current chain head instead of keeping the bootstrap list from config.
+// It keeps the config producers only as a constructor-time fallback, then
+// replaces them once blockchain and validator/SPV dependencies are ready.
+func (p *Pbft) InitCurrentProducersFromChain(currentBlock *types.Block) {
+	if p == nil || p.chain == nil || p.dispatcher == nil {
+		return
+	}
+	if currentBlock == nil {
+		currentBlock = p.chain.CurrentBlock()
+	}
+	if currentBlock == nil {
+		return
+	}
+	log.Info("InitCurrentProducersFromChain", "nonce", currentBlock.Nonce(), "height", currentBlock.NumberU64())
+	if !p.chain.Config().IsPBFTFork(currentBlock.Number()) {
+		log.Info("InitCurrentProducersFromChain skipped: not PBFT fork", "height", currentBlock.NumberU64())
+		return
+	}
+
+	selfDutyIndex := p.GetSelfDutyIndex()
+	if p.bPosValidator != nil && p.bPosValidator.IsBPosFork(currentBlock.NumberU64()) {
+		producers, totalCount, err := p.bPosValidator.GetCurrentValidatorSet(currentBlock.Hash(), currentBlock.NumberU64())
+		if err != nil {
+			log.Error("InitCurrentProducersFromChain bpos failed", "height", currentBlock.NumberU64(), "error", err)
+			return
+		}
+		if p.IsCurrentProducers(producers) {
+			log.Info("[InitCurrentProducersFromChain] bpos producers already current", "totalProducers", totalCount)
+			return
+		}
+		blocksigner.SelfIsProducer = false
+		log.Info("InitCurrentProducersFromChain update bpos producers", "producer length", len(producers), "height", currentBlock.NumberU64())
+		p.UpdateCurrentProducers(producers, int(totalCount), 0)
+		go p.finishInitCurrentProducers(selfDutyIndex)
+		return
+	}
+
+	spvHeight := currentBlock.Nonce()
+	bestSpvHeight := spv.GetSpvHeight()
+	if bestSpvHeight > spvHeight {
+		spvHeight = bestSpvHeight
+	}
+	if spvHeight <= 0 && len(p.GetCurrentProducers()) > 0 {
+		res := p.OnInsertBlock(currentBlock, true)
+		blocksigner.SelfIsProducer = p.IsProducer()
+		log.Info("blocksigner.SelfIsProducer", "", blocksigner.SelfIsProducer)
+		if res {
+			events.Notify(dpos.ETUpdateProducers, selfDutyIndex)
+		}
+		return
+	}
+
+	producers, totalCount, err := spv.GetProducers(spvHeight)
+	if err != nil {
+		log.Info("InitCurrentProducersFromChain GetProducers error", "error", err, "spvHeight", spvHeight)
+		return
+	}
+	if p.IsCurrentProducers(producers) {
+		log.Info("[InitCurrentProducersFromChain] is current producers, do not need update", "totalProducers", totalCount)
+		return
+	}
+	blocksigner.SelfIsProducer = false
+	log.Info("InitCurrentProducersFromChain update producers", "producer length", len(producers), "spvHeight", spvHeight)
+	p.UpdateCurrentProducers(producers, totalCount, spvHeight)
+	spv.InitNextTurnDposInfo()
+	go p.finishInitCurrentProducers(selfDutyIndex)
+}
+
+func (p *Pbft) finishInitCurrentProducers(selfDutyIndex int) {
+	if p.AnnounceDAddr() {
+		if p.IsProducer() {
+			blocksigner.SelfIsProducer = true
+			events.Notify(dpos.ETUpdateProducers, selfDutyIndex)
+			p.Recover()
+		}
+	}
+}
+
 func (p *Pbft) GetProducersByHeight(height uint64) [][]byte {
 	if p.bPosValidator.IsBPosFork(height) {
 		currentHeight := p.chain.CurrentHeader().Number.Uint64()

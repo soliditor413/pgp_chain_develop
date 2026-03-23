@@ -527,7 +527,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		if err := stack.Service(&ethereum); err != nil {
 			utils.Fatalf("Ethereum service not running: %v", err)
 		}
-		initChainBridge(ctx, stack, ethereum.BlockChain())
+		//initChainBridge(ctx, stack, ethereum.BlockChain())
 		//eth.NewBposNetwork(ethereum.BlockChain().GetDposEngine().(*pbft.Pbft)).Start()
 	}
 	//start the SPV service
