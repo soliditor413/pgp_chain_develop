@@ -63,8 +63,6 @@ import (
 	"github.com/pgprotocol/pgp-chain/spv"
 	"github.com/pgprotocol/pgp-chain/validators"
 
-	_interface "github.com/elastos/Elastos.ELA.SPV/interface"
-
 	"github.com/elastos/Elastos.ELA/core/types/payload"
 	msg2 "github.com/elastos/Elastos.ELA/dpos/p2p/msg"
 	elapeer "github.com/elastos/Elastos.ELA/dpos/p2p/peer"
@@ -396,6 +394,7 @@ func New(ctx *node.ServiceContext, config *Config, node *node.Node) (*Ethereum, 
 			return result.Return(), result.Err
 		},
 	))
+	go engine.InitCurrentProducersFromChain(eth.blockchain.CurrentBlock())
 
 	spv.PbftEngine = engine
 	dposAccount, err := dpos.GetDposAccount(chainConfig.PbftKeyStore, []byte(chainConfig.PbftKeyStorePassWord))
@@ -446,55 +445,8 @@ func New(ctx *node.ServiceContext, config *Config, node *node.Node) (*Ethereum, 
 	return eth, nil
 }
 
-func InitCurrentProducers(engine *pbft.Pbft, config *params.ChainConfig, currentBlock *types.Block) {
-	number := currentBlock.NumberU64()
-	log.Info("InitCurrentProducers", "nonce", currentBlock.Nonce(), "height", number)
-	if currentBlock == nil {
-		return
-	}
-	if !config.IsPBFTFork(currentBlock.Number()) {
-		fmt.Println(" >>> is not pbft engine")
-		return
-	}
-	mode := spv.GetCurrentConsensusMode()
-	spvHeight := currentBlock.Nonce()
-	selfDutyIndex := engine.GetSelfDutyIndex()
-	if spvHeight <= 0 && mode == _interface.DPOS && len(engine.GetCurrentProducers()) > 0 {
-		res := engine.OnInsertBlock(currentBlock, true)
-		blocksigner.SelfIsProducer = engine.IsProducer()
-		log.Info("blocksigner.SelfIsProducer", "", blocksigner.SelfIsProducer)
-		if res {
-			eevents.Notify(dpos.ETUpdateProducers, selfDutyIndex)
-		}
-		return
-	}
-	bestSpvHeight := spv.GetSpvHeight()
-	log.Info("", " >>> bestSpvHeight ", bestSpvHeight)
-	if bestSpvHeight > spvHeight {
-		spvHeight = bestSpvHeight
-	}
-	producers, totalProducers, err := spv.GetProducers(spvHeight)
-	if err != nil {
-		log.Info("GetProducers error", "error", err, "spvHeight", spvHeight)
-		return
-	}
-	if engine.IsCurrentProducers(producers) {
-		log.Info("[InitCurrentProducers] is current producers, do not need update", "totalProducers", totalProducers)
-		return
-	}
-	blocksigner.SelfIsProducer = false
-	log.Info("UpdateCurrentProducers ", "producer length", len(producers), "spvHeight", spvHeight)
-	engine.UpdateCurrentProducers(producers, totalProducers, spvHeight)
-	spv.InitNextTurnDposInfo()
-	go func() {
-		if engine.AnnounceDAddr() {
-			if engine.IsProducer() {
-				blocksigner.SelfIsProducer = true
-				eevents.Notify(dpos.ETUpdateProducers, selfDutyIndex)
-				engine.Recover()
-			}
-		}
-	}()
+func InitCurrentProducers(engine *pbft.Pbft, _ *params.ChainConfig, currentBlock *types.Block) {
+	engine.InitCurrentProducersFromChain(currentBlock)
 }
 
 func StartDefaultProducers(engine *pbft.Pbft, config *params.ChainConfig, currentBlock *types.Block) {
