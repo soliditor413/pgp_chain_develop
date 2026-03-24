@@ -818,9 +818,9 @@ func (p *Pbft) recoverAbnormalState() bool {
 				for _, v := range p.statusMap {
 					count += len(v)
 				}
-				fmt.Println("status count = ", count)
+				fmt.Println("status count = ", count, " p.recoverStarted ", p.recoverStarted, " minCount", minCount)
 				p.statusMapMu.RUnlock()
-				if count > minCount {
+				if count >= minCount {
 					log.Info(" >>>>> OnRecoverTimeout 11111")
 					p.OnRecoverTimeout()
 					break
@@ -839,6 +839,7 @@ func (p *Pbft) recoverAbnormalState() bool {
 }
 
 func (p *Pbft) OnRecoverTimeout() {
+	fmt.Println("p.recoverStarted ", p.recoverStarted)
 	if p.recoverStarted == true {
 		p.statusMapMu.Lock()
 		if len(p.statusMap) != 0 {
