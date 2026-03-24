@@ -964,7 +964,7 @@ func (p *Pbft) Recover() {
 		if p.IsCurrent() && activePeersCount > 0 &&
 			activePeersCount >= minCount {
 			log.Info("----- PostRecoverTask --------", "GetActivePeers", len(p.network.GetActivePeers()), "total", len(p.dispatcher.GetConsensusView().GetProducers()))
-			p.network.PostRecoverTask()
+			go p.network.PostRecoverTask()
 			p.isRecovering = false
 			return
 		}
