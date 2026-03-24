@@ -463,6 +463,7 @@ func (d *Dispatcher) HelpToRecoverAbnormal(id peer.PID, height uint64, currentHe
 }
 
 func (d *Dispatcher) RecoverAbnormal(status *dmsg.ConsensusStatus, medianTime int64) {
+	fmt.Println("RecoverAbnormal status", status.ConsensusStatus, "viewOffset", status.ViewOffset, "viewStartTime", status.ViewStartTime)
 	if status == nil {
 		return
 	}
@@ -476,6 +477,7 @@ func (d *Dispatcher) RecoverAbnormal(status *dmsg.ConsensusStatus, medianTime in
 }
 
 func (d *Dispatcher) RecoverFromConsensusStatus(status *dmsg.ConsensusStatus) error {
+	fmt.Println("RecoverFromConsensusStatus status", status.ConsensusStatus, "viewOffset", status.ViewOffset, "viewStartTime", status.ViewStartTime)
 	d.consensusView.consensusStatus = status.ConsensusStatus
 	d.acceptVotes = make(map[common.Uint256]*payload.DPOSProposalVote)
 	//for _, v := range status.AcceptVotes {

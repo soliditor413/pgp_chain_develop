@@ -798,9 +798,6 @@ func (p *Pbft) GetMinAcceptVoteCount() int {
 }
 
 func (p *Pbft) recoverAbnormalState() bool {
-	if p.isRecoverStarted() {
-		return false
-	}
 	minCount := p.GetMinAcceptVoteCount()
 	if producers := p.dispatcher.GetConsensusView().GetProducers(); len(producers) > 0 {
 		if peers := p.network.GetActivePeers(); len(peers) < minCount {
@@ -808,7 +805,10 @@ func (p *Pbft) recoverAbnormalState() bool {
 			p.Recover()
 			return false
 		}
-		p.beginRecoverStarted()
+		if !p.beginRecoverStarted() {
+			return false
+		}
+		p.setRecovered(false)
 		p.RequestAbnormalRecovering()
 		startTime := time.Now()
 		go func() {
@@ -839,17 +839,19 @@ func (p *Pbft) recoverAbnormalState() bool {
 }
 
 func (p *Pbft) OnRecoverTimeout() {
-	fmt.Println("p.recoverStarted ", p.recoverStarted)
-	if p.isRecovered() {
-		p.statusMapMu.Lock()
-		if len(p.statusMap) != 0 {
-			p.doRecoverLocked()
-		}
-		p.statusMap = make(map[uint32]map[string]*dmsg.ConsensusStatus)
-		p.statusMapMu.Unlock()
-		p.finishRecoverStarted()
+	started := p.finishRecoverStarted()
+	fmt.Println("OnRecoverTimeout finishRecoverStarted", started)
+	if !started {
+		return
 	}
-
+	p.statusMapMu.Lock()
+	statusCount := countConsensusStatusesLocked(p.statusMap)
+	fmt.Println("OnRecoverTimeout statusCount", statusCount, "viewOffsetBuckets", len(p.statusMap))
+	if statusCount != 0 {
+		p.doRecoverLocked()
+	}
+	p.statusMap = make(map[uint32]map[string]*dmsg.ConsensusStatus)
+	p.statusMapMu.Unlock()
 	p.setRecovered(true)
 	if p.chain.Engine() == p {
 		p.StartMine()
@@ -864,20 +866,23 @@ func (p *Pbft) DoRecover() {
 
 // doRecoverLocked must be called with statusMapMu held (read or write).
 func (p *Pbft) doRecoverLocked() {
+	fmt.Println("doRecoverLocked statusMap", len(p.statusMap))
 	var maxCountMaxViewOffset uint32
 	for k := range p.statusMap {
 		if maxCountMaxViewOffset < k {
 			maxCountMaxViewOffset = k
 		}
 	}
+	fmt.Println("doRecoverLocked maxCountMaxViewOffset", maxCountMaxViewOffset)
 	var status *dmsg.ConsensusStatus
 	startTimes := make([]int64, 0)
 	for _, v := range p.statusMap[maxCountMaxViewOffset] {
 		if status == nil {
-			if v.ConsensusStatus == dpos.ConsensusReady {
-				p.notHandledProposal = make(map[string]struct{})
-				return
-			}
+			// if v.ConsensusStatus == dpos.ConsensusReady {
+			// 	p.notHandledProposal = make(map[string]struct{})
+			// 	fmt.Println("doRecoverLocked notHandledProposal return", len(p.notHandledProposal))
+			// 	return
+			// }
 			status = v
 		}
 		startTimes = append(startTimes, v.ViewStartTime.UnixNano())
@@ -886,8 +891,10 @@ func (p *Pbft) doRecoverLocked() {
 		return startTimes[i] < startTimes[j]
 	})
 	medianTime := medianOf(startTimes)
+	fmt.Println("doRecoverLocked medianTime", medianTime)
 	p.dispatcher.RecoverAbnormal(status, medianTime)
 	p.notHandledProposal = make(map[string]struct{})
+	fmt.Println("doRecoverLocked notHandledProposal return", len(p.notHandledProposal))
 }
 
 func medianOf(nums []int64) int64 {
@@ -902,6 +909,14 @@ func medianOf(nums []int64) int64 {
 	}
 
 	return nums[l/2]
+}
+
+func countConsensusStatusesLocked(statusMap map[uint32]map[string]*dmsg.ConsensusStatus) int {
+	count := 0
+	for _, statuses := range statusMap {
+		count += len(statuses)
+	}
+	return count
 }
 
 func (p *Pbft) OnResponseResetViewReceived(msg *msg.ResetView) {
