@@ -818,12 +818,15 @@ func (p *Pbft) recoverAbnormalState() bool {
 				for _, v := range p.statusMap {
 					count += len(v)
 				}
+				fmt.Println("status count = ", count)
 				p.statusMapMu.RUnlock()
 				if count > minCount {
+					log.Info(" >>>>> OnRecoverTimeout 11111")
 					p.OnRecoverTimeout()
 					break
 				}
 				if time.Now().Sub(startTime) > time.Second*3 {
+					log.Info(" >>>>> OnRecoverTimeout 22222")
 					p.OnRecoverTimeout()
 					break
 				}
