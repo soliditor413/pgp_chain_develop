@@ -595,7 +595,7 @@ func (p *Pbft) OnResponseConsensus(id peer.PID, status *dmsg.ConsensusStatus) {
 	if !p.IsProducer() {
 		return
 	}
-	if !p.recoverStarted {
+	if !p.isRecoverStarted() {
 		return
 	}
 	p.statusMapMu.Lock()
@@ -798,7 +798,7 @@ func (p *Pbft) GetMinAcceptVoteCount() int {
 }
 
 func (p *Pbft) recoverAbnormalState() bool {
-	if p.recoverStarted {
+	if p.isRecoverStarted() {
 		return false
 	}
 	minCount := p.GetMinAcceptVoteCount()
@@ -808,7 +808,7 @@ func (p *Pbft) recoverAbnormalState() bool {
 			p.Recover()
 			return false
 		}
-		p.recoverStarted = true
+		p.beginRecoverStarted()
 		p.RequestAbnormalRecovering()
 		startTime := time.Now()
 		go func() {
@@ -818,7 +818,7 @@ func (p *Pbft) recoverAbnormalState() bool {
 				for _, v := range p.statusMap {
 					count += len(v)
 				}
-				fmt.Println("status count = ", count, " p.recoverStarted ", p.recoverStarted, " minCount", minCount)
+				fmt.Println("status count = ", count, " p.recoverStarted ", p.isRecoverStarted(), " minCount", minCount)
 				p.statusMapMu.RUnlock()
 				if count >= minCount {
 					log.Info(" >>>>> OnRecoverTimeout 11111")
@@ -840,17 +840,17 @@ func (p *Pbft) recoverAbnormalState() bool {
 
 func (p *Pbft) OnRecoverTimeout() {
 	fmt.Println("p.recoverStarted ", p.recoverStarted)
-	if p.recoverStarted == true {
+	if p.isRecovered() {
 		p.statusMapMu.Lock()
 		if len(p.statusMap) != 0 {
 			p.doRecoverLocked()
 		}
 		p.statusMap = make(map[uint32]map[string]*dmsg.ConsensusStatus)
 		p.statusMapMu.Unlock()
-		p.recoverStarted = false
+		p.finishRecoverStarted()
 	}
 
-	p.isRecoved = true
+	p.setRecovered(true)
 	if p.chain.Engine() == p {
 		p.StartMine()
 	}
