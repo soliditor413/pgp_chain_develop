@@ -1062,7 +1062,7 @@ func (p *Pbft) OnProducersMsg(msg *dmsg.ProducersMsg) {
 		return
 	}
 	if p.IsSameProducers(currentProducers) {
-		log.Info("OnProducersMsg change next turn Producers")
+		log.Info("OnProducersMsg change next turn Producers", " msg.ChangeHeight", msg.ChangeHeight)
 		p.changeNextTurnProduces(msg.ChangeHeight)
 		p.dispatcher.ResetConsensus(p.CurrentBlock().NumberU64() + 1)
 		blocksigner.SelfIsProducer = p.IsProducer()
