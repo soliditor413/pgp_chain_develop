@@ -572,11 +572,13 @@ func (p *Pbft) Finalize(chain consensus.ChainReader, header *types.Header, state
 }
 
 func (p *Pbft) judgeNeedChangeNextTurnProducers(height uint64) {
-	dutyIndex := p.dispatcher.GetConsensusView().GetDutyIndex()
-	if p.bPosValidator != nil && dutyIndex == 0 && p.bPosValidator.IsWorkingHeight(height) {
-		p.needChangeNextTurnProducers = true
+	if p.bPosValidator != nil && p.bPosValidator.IsBPosFork(height) {
+		if height == p.bPosValidator.WorkingHeight() {
+			p.needChangeNextTurnProducers = true
+		}
 		return
 	}
+	dutyIndex := p.dispatcher.GetConsensusView().GetDutyIndex()
 	if dutyIndex == 0 && spv.SpvIsWorkingHeight() {
 		p.needChangeNextTurnProducers = true
 	}
@@ -1055,7 +1057,7 @@ func (p *Pbft) OnViewChanged(isOnDuty bool, force bool) {
 	if isOnDuty && p.OnDuty != nil {
 		p.OnDuty()
 	}
-	if isOnDuty && p.IsCurrent != nil && p.IsCurrent() {
+	if p.IsCurrent != nil && p.IsCurrent() {
 		go p.tryCacheValidatorSet()
 	}
 	proposal := p.dispatcher.UpdatePrecociousProposals()
@@ -1084,7 +1086,9 @@ func (p *Pbft) tryCacheValidatorSet() {
 	if contract == "" || !common.IsHexAddress(contract) {
 		return
 	}
-
+	if p.bPosValidator.BPosStartHeight() > p.chain.CurrentBlock().NumberU64() {
+		return
+	}
 	epoch, err := minermanager.GetCurrentEpoch(contract)
 	if err != nil {
 		log.Debug("tryCacheValidatorSet: getCurrentEpoch failed", "err", err)
