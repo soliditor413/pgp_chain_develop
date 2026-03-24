@@ -406,6 +406,9 @@ func (p *Pbft) OnInsertBlock(block *types.Block, isInit bool) bool {
 			producerPubKey, err := extractProducerFromBlock(block)
 			if err == nil && producerPubKey != nil {
 				p.producerStats.RecordParticipation(producerPubKey, block.NumberU64(), block.Time())
+				if p.account != nil && bytes.Equal(producerPubKey, p.account.PublicKeyBytes()) {
+					go p.tryCacheValidatorSet()
+				}
 			}
 
 			// Synchronously process blacklist events from this block's receipts.
@@ -431,7 +434,10 @@ func (p *Pbft) OnInsertBlock(block *types.Block, isInit bool) bool {
 		if !isSame {
 			p.changeNextTurnProduces(block.NumberU64() + 1)
 			p.dispatcher.ResetConsensus(block.NumberU64() + 1)
-			p.broadChangeProducersMsg(block.NumberU64() + 1)
+			go func() {
+				time.Sleep(time.Millisecond * 500)
+				p.broadChangeProducersMsg(block.NumberU64() + 1)
+			}()
 		} else {
 			log.Info("For the same batch of producers, no need to change current producers")
 		}

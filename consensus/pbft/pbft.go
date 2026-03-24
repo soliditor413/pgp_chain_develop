@@ -1056,9 +1056,6 @@ func (p *Pbft) CleanFinalConfirmedBlock(height uint64) {
 func (p *Pbft) OnViewChanged(isOnDuty bool, force bool) {
 	if isOnDuty && p.OnDuty != nil {
 		p.OnDuty()
-		if p.IsCurrent != nil && p.IsCurrent() {
-			go p.tryCacheValidatorSet()
-		}
 	}
 	proposal := p.dispatcher.UpdatePrecociousProposals()
 	if proposal != nil {
