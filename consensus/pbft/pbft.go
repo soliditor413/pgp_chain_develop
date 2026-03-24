@@ -122,6 +122,7 @@ type Pbft struct {
 	requestedBlocks    map[common.Hash]struct{}
 	requestedProposals map[ecom.Uint256]struct{}
 	statusMapMu        sync.RWMutex
+	recoverStateMu     sync.RWMutex
 	statusMap          map[uint32]map[string]*dmsg.ConsensusStatus
 	notHandledProposal map[string]struct{}
 
@@ -535,7 +536,7 @@ func (p *Pbft) Prepare(chain consensus.ChainReader, header *types.Header) error 
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
-	if !p.isRecoved {
+	if !p.isRecovered() {
 		return ErrWaitRecoverStatus
 	}
 	if header.Number.Uint64() <= p.dispatcher.GetFinishedHeight() {
@@ -601,7 +602,7 @@ func (p *Pbft) Seal(chain consensus.ChainReader, block *types.Block, results cha
 		return errors.New("no signer inited")
 	}
 
-	if !p.isRecoved {
+	if !p.isRecovered() {
 		return ErrWaitRecoverStatus
 	}
 
@@ -983,6 +984,44 @@ func (p *Pbft) IsProducer() bool {
 		return false
 	}
 	return p.dispatcher.IsProducer(p.account.PublicKeyBytes())
+}
+
+func (p *Pbft) beginRecoverStarted() bool {
+	p.recoverStateMu.Lock()
+	defer p.recoverStateMu.Unlock()
+	if p.recoverStarted {
+		return false
+	}
+	p.recoverStarted = true
+	return true
+}
+
+func (p *Pbft) isRecoverStarted() bool {
+	p.recoverStateMu.RLock()
+	defer p.recoverStateMu.RUnlock()
+	return p.recoverStarted
+}
+
+func (p *Pbft) finishRecoverStarted() bool {
+	p.recoverStateMu.Lock()
+	defer p.recoverStateMu.Unlock()
+	if !p.recoverStarted {
+		return false
+	}
+	p.recoverStarted = false
+	return true
+}
+
+func (p *Pbft) isRecovered() bool {
+	p.recoverStateMu.RLock()
+	defer p.recoverStateMu.RUnlock()
+	return p.isRecoved
+}
+
+func (p *Pbft) setRecovered(recovered bool) {
+	p.recoverStateMu.Lock()
+	defer p.recoverStateMu.Unlock()
+	p.isRecoved = recovered
 }
 
 func (p *Pbft) SetBlockChain(chain *core.BlockChain) {
