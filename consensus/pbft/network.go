@@ -167,6 +167,23 @@ func (p *Pbft) UpdateCurrentProducers(producers [][]byte, totalCount int, spvHei
 	spv.SetCurrentProducers(producers)
 }
 
+// GetValidatorsByHeight retrieves the current validators for the given height.
+// If the requested height is less than the current workingHeight, it falls back to the previous epoch's validator set.
+func (p *Pbft) GetValidatorsByHeight(height uint64) (validatorList [][]byte, totalCount uint8, workingHeight uint64, err error) {
+	validatorList, totalCount, workingHeight, err = p.bPosValidator.GetCurrentValidatorSet(height)
+	if err != nil {
+		return validatorList, totalCount, workingHeight, err
+	}
+
+	if height < workingHeight {
+		validatorList, totalCount, workingHeight, err = p.bPosValidator.GetCurrentValidatorSet(height - validators.BLOCKS_PER_EPOCH)
+		if err != nil {
+			return validatorList, totalCount, workingHeight, err
+		}
+	}
+	return validatorList, totalCount, workingHeight, err
+}
+
 // InitCurrentProducersFromChain refreshes the in-memory current producers from
 // the current chain head instead of keeping the bootstrap list from config.
 // It keeps the config producers only as a constructor-time fallback, then
@@ -189,7 +206,7 @@ func (p *Pbft) InitCurrentProducersFromChain(currentBlock *types.Block) {
 
 	selfDutyIndex := p.GetSelfDutyIndex()
 	if p.bPosValidator != nil && p.bPosValidator.IsBPosFork(currentBlock.NumberU64()) {
-		producers, totalCount, err := p.bPosValidator.GetCurrentValidatorSet(currentBlock.Hash(), currentBlock.NumberU64())
+		producers, totalCount, _, err := p.GetValidatorsByHeight(currentBlock.NumberU64())
 		if err != nil {
 			log.Error("InitCurrentProducersFromChain bpos failed", "height", currentBlock.NumberU64(), "error", err)
 			return
@@ -253,12 +270,10 @@ func (p *Pbft) GetProducersByHeight(height uint64) [][]byte {
 			height = currentHeight
 		}
 		epoch := (height - p.bPosValidator.BPosStartHeight()) / validators.BLOCKS_PER_EPOCH
-		// Try on-chain cache first (reads latest state, immune to pruning).
-		list, _, err := p.bPosValidator.GetCachedValidatorSet(epoch)
+		list, _, _, err := p.bPosValidator.GetCachedValidatorSet(epoch)
 		if err == nil && len(list) > 0 {
 			return list
 		}
-		// Fall back to historical state query.
 		list, _, err = p.bPosValidator.GetNextValidatorSetByNumber(height)
 		if err != nil {
 			log.Error("GetProducersByHeight bpos fork error", "error", err)
@@ -447,7 +462,7 @@ func (p *Pbft) OnInsertBlock(block *types.Block, isInit bool) bool {
 			return true
 		}
 	} else if p.bPosValidator.IsBPosFork(block.NumberU64()) {
-		producers, totalCount, err := p.bPosValidator.GetCurrentValidatorSet(block.Hash(), block.NumberU64())
+		producers, totalCount, workingHeight, err := p.bPosValidator.GetCurrentValidatorSet(block.NumberU64())
 		if err != nil {
 			log.Error("get dpos validator failed", "error", err)
 			return false
@@ -456,12 +471,13 @@ func (p *Pbft) OnInsertBlock(block *types.Block, isInit bool) bool {
 		if isCurrent {
 			return false
 		}
-		fmt.Println(">>>>>>>>>>> OnInsertBlock update current producers GetCurrentValidatorSet <<<<<<<<<<<<", "totalCount ", totalCount)
-		if p.bPosValidator.IsWorkingHeight(block.NumberU64()) || isInit {
+		fmt.Println(">>>>>>>>>>> OnInsertBlock update current producers GetCurrentValidatorSet <<<<<<<<<<<<", "totalCount ", totalCount, "workingHeight", workingHeight)
+		if block.NumberU64() >= workingHeight || isInit {
 			fmt.Println("is working height")
 			p.UpdateCurrentProducers(producers, int(totalCount), 0)
 		} else {
 			fmt.Println("not working height")
+			return false
 		}
 		go p.AnnounceDAddr()
 		go p.Recover()
