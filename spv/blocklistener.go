@@ -168,8 +168,25 @@ func IsNexturnBlock(block interface{}) bool {
 }
 
 func InitNextTurnDposInfo() {
-	if SpvService.GetBlockListener().(*BlockListener).IsBPosHeight() {
-		log.Warn("init next turn dpos info error", "height", SpvService.GetBlockListener().BlockHeight())
+	if SpvService == nil {
+		log.Warn("init next turn dpos info skipped: spv service is nil")
+		nextTurnDposInfo = nil
+		return
+	}
+	listener := SpvService.GetBlockListener()
+	if listener == nil {
+		log.Warn("init next turn dpos info skipped: block listener is nil")
+		nextTurnDposInfo = nil
+		return
+	}
+	blockListener, ok := listener.(*BlockListener)
+	if !ok || blockListener == nil {
+		log.Warn("init next turn dpos info skipped: invalid block listener type")
+		nextTurnDposInfo = nil
+		return
+	}
+	if blockListener.IsBPosHeight() {
+		log.Warn("init next turn dpos info error", "height", blockListener.BlockHeight())
 		nextTurnDposInfo = nil
 		return
 	}

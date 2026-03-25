@@ -80,6 +80,9 @@ func GetTotalProducersCount() int {
 
 func SpvIsWorkingHeight() bool {
 	if nextTurnDposInfo != nil {
+		if SpvService == nil || SpvService.GetBlockListener() == nil {
+			return false
+		}
 		return SpvService.GetBlockListener().BlockHeight() > nextTurnDposInfo.WorkingHeight
 	}
 	return false
