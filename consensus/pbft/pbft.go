@@ -119,16 +119,18 @@ type Pbft struct {
 	OnDuty             func()
 	OnInsertChainError func(id peer.PID, block *types.Block, err error)
 
-	requestedBlocks    map[common.Hash]struct{}
-	requestedProposals map[ecom.Uint256]struct{}
-	statusMapMu        sync.RWMutex
-	recoverStateMu     sync.RWMutex
-	statusMap          map[uint32]map[string]*dmsg.ConsensusStatus
-	notHandledProposal map[string]struct{}
+	requestedBlocks     map[common.Hash]struct{}
+	requestedProposals  map[ecom.Uint256]struct{}
+	statusMapMu         sync.RWMutex
+	recoverStateMu      sync.RWMutex
+	cacheValidatorSetMu sync.Mutex
+	statusMap           map[uint32]map[string]*dmsg.ConsensusStatus
+	notHandledProposal  map[string]struct{}
 
 	enableViewLoop              bool
 	recoverStarted              bool
 	isRecoved                   bool
+	lastCacheValidatorSetBlock  uint64
 	period                      uint64
 	isSealOver                  bool
 	isRecovering                bool
@@ -1114,29 +1116,34 @@ func (p *Pbft) OnViewChanged(isOnDuty bool, force bool) {
 
 // tryCacheValidatorSet submits a cacheValidatorSet tx if the current epoch
 // has not been cached yet. Runs asynchronously so it does not block consensus.
-func (p *Pbft) tryCacheValidatorSet() {
-	if p.bPosValidator == nil || p.account == nil {
+func (p *Pbft) tryCacheValidatorSet(blockHeight uint64) {
+	if p.bPosValidator == nil || p.account == nil || p.chain == nil {
 		return
 	}
 	contract := p.bPosValidator.ValidatorContract()
 	if contract == "" || !common.IsHexAddress(contract) {
 		return
 	}
-	if p.bPosValidator.BPosStartHeight() > p.chain.CurrentBlock().NumberU64() {
+	if p.bPosValidator.BPosStartHeight() > blockHeight {
+		return
+	}
+	if p.lastCacheValidatorSetBlock != 0 && blockHeight < p.lastCacheValidatorSetBlock+2 {
+		log.Info("tryCacheValidatorSet: skipped due to block interval", "blockHeight", blockHeight, " lastCacheValidatorSetBlock ", p.lastCacheValidatorSetBlock)
 		return
 	}
 	epoch, err := minermanager.GetCurrentEpoch(contract)
 	if err != nil {
-		log.Debug("tryCacheValidatorSet: getCurrentEpoch failed", "err", err)
+		log.Error("tryCacheValidatorSet: getCurrentEpoch failed", "err", err)
 		return
 	}
 
 	cached, err := minermanager.IsValidatorSetCached(contract, epoch)
 	if err != nil {
-		log.Debug("tryCacheValidatorSet: isValidatorSetCached failed", "err", err)
+		log.Error("tryCacheValidatorSet: recheck isValidatorSetCached failed", "err", err)
 		return
 	}
 	if cached {
+		fmt.Println("tryCacheValidatorSet: cached", "blockHeight", blockHeight)
 		return
 	}
 
@@ -1166,6 +1173,7 @@ func (p *Pbft) tryCacheValidatorSet() {
 		log.Warn("tryCacheValidatorSet: send tx failed", "err", err)
 		return
 	}
+	p.lastCacheValidatorSetBlock = blockHeight
 	log.Info("Submitted cacheValidatorSet", "epoch", epoch, "txHash", txHash.String())
 }
 

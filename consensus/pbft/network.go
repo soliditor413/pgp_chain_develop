@@ -399,7 +399,12 @@ func (p *Pbft) OnInsertBlock(block *types.Block, isInit bool) bool {
 	if p.dispatcher == nil {
 		return false
 	}
-
+	cachValidator := false
+	defer func() {
+		if cachValidator && p.IsProducer() {
+			go p.tryCacheValidatorSet(block.NumberU64())
+		}
+	}()
 	// Record producer participation statistics
 	if p.producerStats != nil && !isInit {
 		if p.bPosValidator.IsBPosFork(block.NumberU64()) {
@@ -407,7 +412,7 @@ func (p *Pbft) OnInsertBlock(block *types.Block, isInit bool) bool {
 			if err == nil && producerPubKey != nil {
 				p.producerStats.RecordParticipation(producerPubKey, block.NumberU64(), block.Time())
 				if p.account != nil && bytes.Equal(producerPubKey, p.account.PublicKeyBytes()) {
-					go p.tryCacheValidatorSet()
+					cachValidator = true
 				}
 			}
 
@@ -477,17 +482,13 @@ func (p *Pbft) OnInsertBlock(block *types.Block, isInit bool) bool {
 		if isCurrent {
 			return false
 		}
-		fmt.Println(">>>>>>>>>>> OnInsertBlock update current producers GetCurrentValidatorSet <<<<<<<<<<<<", "totalCount ", totalCount, "workingHeight", workingHeight)
 		if block.NumberU64() >= workingHeight || isInit {
-			fmt.Println("is working height")
+			fmt.Println(">>>>>>>>>>> OnInsertBlock update current producers GetCurrentValidatorSet <<<<<<<<<<<<", "totalCount ", totalCount, "workingHeight", workingHeight)
 			p.UpdateCurrentProducers(producers, int(totalCount), 0)
-		} else {
-			fmt.Println("not working height")
-			return false
+			go p.AnnounceDAddr()
+			go p.Recover()
+			return true
 		}
-		go p.AnnounceDAddr()
-		go p.Recover()
-		return true
 	}
 	return false
 }
