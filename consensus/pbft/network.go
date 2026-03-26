@@ -263,29 +263,6 @@ func (p *Pbft) finishInitCurrentProducers(selfDutyIndex int) {
 	}
 }
 
-func (p *Pbft) GetProducersByHeight(height uint64) [][]byte {
-	if p.bPosValidator.IsBPosFork(height) {
-		currentHeight := p.chain.CurrentHeader().Number.Uint64()
-		if height > currentHeight {
-			height = currentHeight
-		}
-		epoch := (height - p.bPosValidator.BPosStartHeight()) / validators.BLOCKS_PER_EPOCH
-		list, _, _, err := p.bPosValidator.GetCachedValidatorSet(epoch)
-		if err == nil && len(list) > 0 {
-			return list
-		}
-		list, _, err = p.bPosValidator.GetNextValidatorSetByNumber(height)
-		if err != nil {
-			log.Error("GetProducersByHeight bpos fork error", "error", err)
-			return p.dispatcher.GetConsensusView().GetProducers()
-		}
-		return list
-	} else {
-		list := p.dispatcher.GetConsensusView().GetProducers()
-		return list
-	}
-}
-
 func (p *Pbft) GetCurrentProducers() [][]byte {
 	return p.dispatcher.GetConsensusView().GetProducers()
 }

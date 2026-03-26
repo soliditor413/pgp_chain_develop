@@ -1689,7 +1689,11 @@ func (c *isProducer) Run(input []byte) ([]byte, error) {
 		return false32Byte, nil
 	}
 	height := big.NewInt(0).SetBytes(blockNumber)
-	list := spv.PbftEngine.GetProducersByHeight(height.Uint64())
+	list, _, _, err := spv.PbftEngine.GetValidatorsByHeight(height.Uint64())
+	if err != nil {
+		log.Warn("checkProducerInactive: GetValidatorsByHeight failed", "height", height.Uint64(), "err", err)
+		return false32Byte, nil
+	}
 	for _, producer := range list {
 		if bytes.Equal(producer, producerPubKey) {
 			return true32Byte, nil
