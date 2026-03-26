@@ -414,8 +414,12 @@ func (p *Pbft) OnInsertBlock(block *types.Block, isInit bool) bool {
 		curProducers := p.dispatcher.GetConsensusView().GetProducers()
 		isSame := p.dispatcher.GetConsensusView().IsSameProducers(curProducers)
 		if !isSame {
+			wasRunning := p.dispatcher.GetConsensusView().IsRunning()
 			p.changeNextTurnProduces(block.NumberU64() + 1)
 			p.dispatcher.ResetConsensus(block.NumberU64() + 1)
+			if wasRunning {
+				p.dispatcher.GetConsensusView().SetRunning()
+			}
 			go func() {
 				time.Sleep(time.Millisecond * 500)
 				p.broadChangeProducersMsg(block.NumberU64() + 1)
@@ -1066,8 +1070,12 @@ func (p *Pbft) OnProducersMsg(msg *dmsg.ProducersMsg) {
 	}
 	if p.IsSameProducers(currentProducers) {
 		log.Info("OnProducersMsg change next turn Producers", " msg.ChangeHeight", msg.ChangeHeight)
+		wasRunning := p.dispatcher.GetConsensusView().IsRunning()
 		p.changeNextTurnProduces(msg.ChangeHeight)
 		p.dispatcher.ResetConsensus(p.CurrentBlock().NumberU64() + 1)
+		if wasRunning {
+			p.dispatcher.GetConsensusView().SetRunning()
+		}
 		blocksigner.SelfIsProducer = p.IsProducer()
 	}
 }
