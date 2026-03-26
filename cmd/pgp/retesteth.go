@@ -234,8 +234,9 @@ func (e *NoRewardEngine) GetCurrentProducers() [][]byte {
 	return [][]byte{}
 }
 
-func (e *NoRewardEngine) GetProducersByHeight(height uint64) [][]byte {
-	return e.GetCurrentProducers()
+func (e *NoRewardEngine) GetValidatorsByHeight(height uint64) ([][]byte, uint8, uint64, error) {
+	validators := e.GetCurrentProducers()
+	return validators, uint8(len(validators)), 0, nil
 }
 
 func (e *NoRewardEngine) accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {

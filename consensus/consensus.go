@@ -123,7 +123,7 @@ type Engine interface {
 
 	IsInBlockPool(hash common.Hash) bool
 
-	GetProducersByHeight(height uint64) [][]byte
+	GetValidatorsByHeight(height uint64) (validatorList [][]byte, totalCount uint8, workingHeight uint64, err error)
 }
 
 // PoW is a consensus engine based on proof-of-work.

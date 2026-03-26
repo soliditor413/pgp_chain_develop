@@ -602,8 +602,9 @@ func (ethash *Ethash) GetCurrentProducers() [][]byte {
 	return [][]byte{}
 }
 
-func (ethash *Ethash) GetProducersByHeight(height uint64) [][]byte {
-	return ethash.GetCurrentProducers()
+func (ethash *Ethash) GetValidatorsByHeight(height uint64) ([][]byte, uint8, uint64, error) {
+	validators := ethash.GetCurrentProducers()
+	return validators, uint8(len(validators)), 0, nil
 }
 
 // cache tries to retrieve a verification cache for the specified block number

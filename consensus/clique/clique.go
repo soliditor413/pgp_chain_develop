@@ -758,8 +758,9 @@ func (c *Clique) GetCurrentProducers() [][]byte {
 	return [][]byte{}
 }
 
-func (c *Clique) GetProducersByHeight(height uint64) [][]byte {
-	return c.GetCurrentProducers()
+func (c *Clique) GetValidatorsByHeight(height uint64) ([][]byte, uint8, uint64, error) {
+	validators := c.GetCurrentProducers()
+	return validators, uint8(len(validators)), 0, nil
 }
 
 // Used for test
