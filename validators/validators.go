@@ -162,11 +162,11 @@ func (v *BposValidator) GetCurrentValidatorSet(height uint64) ([][]byte, uint8, 
 	if !common.IsHexAddress(v.validatorContract) {
 		return nil, 0, 0, errors.New("validator contract address is invalid")
 	}
-	if height < v.bPosStartHeight {
-		return nil, 0, 0, errors.New("height is less than bPosStartHeight")
+	var epoch uint64 = 0
+	if height > v.bPosStartHeight {
+		epoch = (height - v.bPosStartHeight) / BLOCKS_PER_EPOCH
 	}
-	epoch := (height - v.bPosStartHeight) / BLOCKS_PER_EPOCH
-	fmt.Println(">>>>>>>>>>> GetCurrentValidatorSet <<<<<<<<<<< epoch ", epoch)
+	log.Info(">>>>>>>>>>> GetCurrentValidatorSet <<<<<<<<<<< ", "epoch:", epoch)
 	if epoch != 0 && (height-v.bPosStartHeight)%BLOCKS_PER_EPOCH == 0 {
 		epoch = epoch - 1
 	}

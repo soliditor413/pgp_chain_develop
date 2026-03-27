@@ -155,6 +155,10 @@ func SendCacheValidatorSet(contract string, producerPublicKey []byte, signature 
 		return common.Hash{}, err
 	}
 	contractAddr := common.HexToAddress(contract)
+	if err := precheckContractCall(client, from, contractAddr, inputData); err != nil {
+		log.Warn("CacheValidatorSet precheck failed", "error", err)
+		return common.Hash{}, err
+	}
 	gasLimit := uint64(3000000)
 	gasprice, err := client.SuggestGasPrice(context.Background())
 	if err != nil {
@@ -210,4 +214,10 @@ func encodeUint256(value *big.Int) []byte {
 		copy(padded[32-len(b):], b)
 	}
 	return padded
+}
+
+func precheckContractCall(client *ethclient.Client, from common.Address, contractAddr common.Address, inputData []byte) error {
+	msg := ethereum.CallMsg{From: from, To: &contractAddr, Data: inputData}
+	_, err := client.PendingCallContract(context.Background(), msg)
+	return err
 }
