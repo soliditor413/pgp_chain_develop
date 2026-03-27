@@ -575,6 +575,9 @@ func (p *Pbft) Finalize(chain consensus.ChainReader, header *types.Header, state
 }
 
 func (p *Pbft) judgeNeedChangeNextTurnProducers(height uint64) {
+	if !p.IsCurrent() {
+		return
+	}
 	if p.bPosValidator != nil && p.bPosValidator.IsBPosFork(height) {
 		if height == p.bPosValidator.WorkingHeight() {
 			p.needChangeNextTurnProducers = true
