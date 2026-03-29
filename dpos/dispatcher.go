@@ -230,6 +230,21 @@ func (d *Dispatcher) ResetConsensus(height uint64) {
 	d.resetViewMu.Unlock()
 }
 
+func (d *Dispatcher) ResetConsensusForEpochTransition(height uint64, parentTime uint64) {
+	Info("[ResetConsensusForEpochTransition] start", "height", height)
+	defer Info("[ResetConsensusForEpochTransition] end")
+
+	d.consensusView.SetReady()
+	d.CleanProposals(false)
+	d.consensusView.resetViewOffset()
+	d.consensusView.UpdateDutyIndex(height)
+	d.consensusView.ChangeView(d.timeSource.AdjustedTime(), true, parentTime)
+
+	d.resetViewMu.Lock()
+	d.resetViewRequests = make(map[string]struct{}, 0)
+	d.resetViewMu.Unlock()
+}
+
 func (d *Dispatcher) OnResponseResetViewReceived(msg *msg.ResetView) error {
 	signer := msg.Sponsor
 	sign := msg.Sign
