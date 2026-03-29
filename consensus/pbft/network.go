@@ -414,15 +414,13 @@ func (p *Pbft) OnInsertBlock(block *types.Block, isInit bool) bool {
 		curProducers := p.dispatcher.GetConsensusView().GetProducers()
 		isSame := p.dispatcher.GetConsensusView().IsSameProducers(curProducers)
 		if !isSame {
-			wasRunning := p.dispatcher.GetConsensusView().IsRunning()
-			p.changeNextTurnProduces(block.NumberU64() + 1)
-			p.dispatcher.ResetConsensus(block.NumberU64() + 1)
-			if wasRunning {
-				p.dispatcher.GetConsensusView().SetRunning()
-			}
+			nextHeight := block.NumberU64() + 1
+			p.changeNextTurnProduces(nextHeight)
+			p.dispatcher.ResetConsensusForEpochTransition(nextHeight, block.Time())
+			p.dispatcher.GetConsensusView().SetRunning()
 			go func() {
-				time.Sleep(time.Millisecond * 500)
-				p.broadChangeProducersMsg(block.NumberU64() + 1)
+				time.Sleep(time.Millisecond * 100)
+				p.broadChangeProducersMsg(nextHeight)
 			}()
 		} else {
 			log.Info("For the same batch of producers, no need to change current producers")
@@ -449,8 +447,10 @@ func (p *Pbft) OnInsertBlock(block *types.Block, isInit bool) bool {
 		}
 		if isBackword && !isCurrent {
 			p.UpdateCurrentProducers(producers, totalCount, spvHeight)
-			go p.AnnounceDAddr()
-			go p.Recover()
+			go func() {
+				p.AnnounceDAddr()
+				p.Recover()
+			}()
 			return true
 		}
 	} else if p.bPosValidator.IsBPosFork(block.NumberU64()) {
@@ -466,8 +466,10 @@ func (p *Pbft) OnInsertBlock(block *types.Block, isInit bool) bool {
 		if block.NumberU64() >= workingHeight || isInit {
 			fmt.Println(">>>>>>>>>>> OnInsertBlock update current producers GetCurrentValidatorSet <<<<<<<<<<<<", "totalCount ", totalCount, "workingHeight", workingHeight)
 			p.UpdateCurrentProducers(producers, int(totalCount), 0)
-			go p.AnnounceDAddr()
-			go p.Recover()
+			go func() {
+				p.AnnounceDAddr()
+				p.Recover()
+			}()
 			return true
 		}
 	}
@@ -480,8 +482,10 @@ func (p *Pbft) changeNextTurnProduces(changeHeight uint64) {
 		spvHeight = 0
 	}
 	p.dispatcher.GetConsensusView().ChangeCurrentProducers(changeHeight, spvHeight)
-	go p.AnnounceDAddr()
-	go p.Recover()
+	go func() {
+		p.AnnounceDAddr()
+		p.Recover()
+	}()
 	p.dispatcher.GetConsensusView().DumpInfo()
 	spv.SetCurrentProducers(p.GetCurrentProducers())
 }
@@ -1070,12 +1074,11 @@ func (p *Pbft) OnProducersMsg(msg *dmsg.ProducersMsg) {
 	}
 	if p.IsSameProducers(currentProducers) {
 		log.Info("OnProducersMsg change next turn Producers", " msg.ChangeHeight", msg.ChangeHeight)
-		wasRunning := p.dispatcher.GetConsensusView().IsRunning()
 		p.changeNextTurnProduces(msg.ChangeHeight)
-		p.dispatcher.ResetConsensus(p.CurrentBlock().NumberU64() + 1)
-		if wasRunning {
-			p.dispatcher.GetConsensusView().SetRunning()
-		}
+		currentBlock := p.CurrentBlock()
+		parentTime := currentBlock.Time()
+		p.dispatcher.ResetConsensusForEpochTransition(currentBlock.NumberU64()+1, parentTime)
+		p.dispatcher.GetConsensusView().SetRunning()
 		blocksigner.SelfIsProducer = p.IsProducer()
 	}
 }
