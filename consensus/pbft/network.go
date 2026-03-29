@@ -864,11 +864,11 @@ func (p *Pbft) doRecoverLocked() {
 	startTimes := make([]int64, 0)
 	for _, v := range p.statusMap[maxCountMaxViewOffset] {
 		if status == nil {
-			// if v.ConsensusStatus == dpos.ConsensusReady {
-			// 	p.notHandledProposal = make(map[string]struct{})
-			// 	fmt.Println("doRecoverLocked notHandledProposal return", len(p.notHandledProposal))
-			// 	return
-			// }
+			if v.ConsensusStatus == dpos.ConsensusReady {
+				p.notHandledProposal = make(map[string]struct{})
+				fmt.Println("doRecoverLocked notHandledProposal return", len(p.notHandledProposal))
+				return
+			}
 			status = v
 		}
 		startTimes = append(startTimes, v.ViewStartTime.UnixNano())
