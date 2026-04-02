@@ -90,6 +90,8 @@ var (
 
 	ErrWaitRecoverStatus = errors.New("wait for recoved states")
 
+	ErrEpochTransitionPending = errors.New("epoch transition pending, skip mining")
+
 	// errInvalidDifficulty is returned if the difficulty of a block neither 2.
 	errInvalidDifficulty = errors.New("invalid difficulty")
 
@@ -136,6 +138,7 @@ type Pbft struct {
 	isRecovering                bool
 	isSealing                   int32
 	needChangeNextTurnProducers bool
+	epochTransitionPending      int32
 	producerStats               *ProducerStats // Producer participation statistics
 	bPosValidator               *validators.BposValidator
 }
@@ -323,6 +326,7 @@ func (p *Pbft) subscribeEvent() {
 			if p.needChangeNextTurnProducers {
 				p.changeNextTurnProduces(p.GetBlockChain().CurrentBlock().NumberU64() + 1)
 				p.needChangeNextTurnProducers = false
+				atomic.StoreInt32(&p.epochTransitionPending, 0)
 			}
 		case dpos.ETSmallCroTx:
 			if croTx, ok := e.Data.(*smallcrosstx.ETSmallCrossTx); ok {
@@ -550,6 +554,9 @@ func (p *Pbft) Prepare(chain consensus.ChainReader, header *types.Header) error 
 	if !p.IsProducer() {
 		return errUnauthorizedSigner
 	}
+	if atomic.LoadInt32(&p.epochTransitionPending) == 1 {
+		return ErrEpochTransitionPending
+	}
 	p.Start(parent.Time)
 	header.Time = parent.Time + p.period
 	if header.Time < nowTime {
@@ -581,12 +588,16 @@ func (p *Pbft) judgeNeedChangeNextTurnProducers(height uint64) {
 	if p.bPosValidator != nil && p.bPosValidator.IsBPosFork(height) {
 		if height == p.bPosValidator.WorkingHeight() {
 			p.needChangeNextTurnProducers = true
+			atomic.StoreInt32(&p.epochTransitionPending, 1)
+			log.Info("Epoch transition pending, block mining until OnInsertBlock completes", "height", height)
 		}
 		return
 	}
 	dutyIndex := p.dispatcher.GetConsensusView().GetDutyIndex()
 	if dutyIndex == 0 && spv.SpvIsWorkingHeight() {
 		p.needChangeNextTurnProducers = true
+		atomic.StoreInt32(&p.epochTransitionPending, 1)
+		log.Info("Epoch transition pending (SPV), block mining until OnInsertBlock completes", "height", height)
 	}
 }
 
@@ -603,6 +614,9 @@ func (p *Pbft) FinalizeAndAssemble(chain consensus.ChainReader, header *types.He
 
 func (p *Pbft) Seal(chain consensus.ChainReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
 	dpos.Info("Pbft Seal:", block.NumberU64())
+	if atomic.LoadInt32(&p.epochTransitionPending) == 1 {
+		return ErrEpochTransitionPending
+	}
 	if p.account == nil {
 		return errors.New("no signer inited")
 	}
@@ -955,7 +969,6 @@ func (p *Pbft) changeViewLoop() {
 func (p *Pbft) Recover() {
 	if p.IsCurrent == nil || p.account == nil || p.isRecovering ||
 		!p.dispatcher.IsProducer(p.account.PublicKeyBytes()) {
-		log.Info(" [Recover]Recover Error >>>>> ")
 		p.dispatcher.GetConsensusView().DumpInfo()
 		p.isRecovering = false
 		return

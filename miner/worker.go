@@ -889,7 +889,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	}
 	if err := w.engine.Prepare(w.chain, header); err != nil {
 		log.Error("Failed to prepare header for mining", "err", err)
-		if err != pbft.ErrSignerNotOnduty && err != pbft.ErrWaitRecoverStatus {
+		if err != pbft.ErrSignerNotOnduty && err != pbft.ErrWaitRecoverStatus && err != pbft.ErrEpochTransitionPending {
 			return
 		}
 	}

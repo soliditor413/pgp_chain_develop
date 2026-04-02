@@ -369,7 +369,7 @@ func (p *Pbft) AccessFutureBlock(parent *types.Block) {
 
 func (p *Pbft) broadChangeProducersMsg(changeHeight uint64) {
 	producerMsg := dmsg.NewProducersMsg(spv.GetSpvHeight(), changeHeight, p.GetCurrentProducers())
-	p.BroadMessage(producerMsg)
+	p.BroadMessageToAllPeers(producerMsg)
 }
 
 func (p *Pbft) OnInsertBlock(block *types.Block, isInit bool) bool {
@@ -411,13 +411,17 @@ func (p *Pbft) OnInsertBlock(block *types.Block, isInit bool) bool {
 		"height", block.NumberU64())
 	if p.needChangeNextTurnProducers {
 		p.needChangeNextTurnProducers = false
+		atomic.StoreInt32(&p.epochTransitionPending, 0)
 		curProducers := p.dispatcher.GetConsensusView().GetProducers()
 		isSame := p.dispatcher.GetConsensusView().IsSameProducers(curProducers)
 		if !isSame {
 			nextHeight := block.NumberU64() + 1
 			p.changeNextTurnProduces(nextHeight)
 			p.dispatcher.ResetConsensusForEpochTransition(nextHeight, block.Time())
-			p.dispatcher.GetConsensusView().SetRunning()
+			go func() {
+				p.AnnounceDAddr()
+				p.Recover()
+			}()
 			go func() {
 				time.Sleep(time.Millisecond * 100)
 				if p.IsProducer() {
@@ -1079,7 +1083,10 @@ func (p *Pbft) OnProducersMsg(msg *dmsg.ProducersMsg) {
 		currentBlock := p.CurrentBlock()
 		parentTime := currentBlock.Time()
 		p.dispatcher.ResetConsensusForEpochTransition(currentBlock.NumberU64()+1, parentTime)
-		p.dispatcher.GetConsensusView().SetRunning()
 		blocksigner.SelfIsProducer = p.IsProducer()
+		go func() {
+			p.AnnounceDAddr()
+			p.Recover()
+		}()
 	}
 }
