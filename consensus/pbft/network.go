@@ -369,7 +369,7 @@ func (p *Pbft) AccessFutureBlock(parent *types.Block) {
 
 func (p *Pbft) broadChangeProducersMsg(changeHeight uint64) {
 	producerMsg := dmsg.NewProducersMsg(spv.GetSpvHeight(), changeHeight, p.GetCurrentProducers())
-	p.BroadMessageToAllPeers(producerMsg)
+	p.BroadMessage(producerMsg)
 }
 
 func (p *Pbft) OnInsertBlock(block *types.Block, isInit bool) bool {
@@ -420,7 +420,9 @@ func (p *Pbft) OnInsertBlock(block *types.Block, isInit bool) bool {
 			p.dispatcher.GetConsensusView().SetRunning()
 			go func() {
 				time.Sleep(time.Millisecond * 100)
-				p.broadChangeProducersMsg(nextHeight)
+				if p.IsProducer() {
+					p.broadChangeProducersMsg(nextHeight)
+				}
 			}()
 		} else {
 			log.Info("For the same batch of producers, no need to change current producers")
@@ -852,21 +854,18 @@ func (p *Pbft) DoRecover() {
 
 // doRecoverLocked must be called with statusMapMu held (read or write).
 func (p *Pbft) doRecoverLocked() {
-	fmt.Println("doRecoverLocked statusMap", len(p.statusMap))
 	var maxCountMaxViewOffset uint32
 	for k := range p.statusMap {
 		if maxCountMaxViewOffset < k {
 			maxCountMaxViewOffset = k
 		}
 	}
-	fmt.Println("doRecoverLocked maxCountMaxViewOffset", maxCountMaxViewOffset)
 	var status *dmsg.ConsensusStatus
 	startTimes := make([]int64, 0)
 	for _, v := range p.statusMap[maxCountMaxViewOffset] {
 		if status == nil {
 			if v.ConsensusStatus == dpos.ConsensusReady {
 				p.notHandledProposal = make(map[string]struct{})
-				fmt.Println("doRecoverLocked notHandledProposal return", len(p.notHandledProposal))
 				return
 			}
 			status = v
@@ -877,10 +876,8 @@ func (p *Pbft) doRecoverLocked() {
 		return startTimes[i] < startTimes[j]
 	})
 	medianTime := medianOf(startTimes)
-	fmt.Println("doRecoverLocked medianTime", medianTime)
 	p.dispatcher.RecoverAbnormal(status, medianTime)
 	p.notHandledProposal = make(map[string]struct{})
-	fmt.Println("doRecoverLocked notHandledProposal return", len(p.notHandledProposal))
 }
 
 func medianOf(nums []int64) int64 {
@@ -1066,6 +1063,10 @@ func (p *Pbft) OnProducersMsg(msg *dmsg.ProducersMsg) {
 	currentProducers := msg.Producers
 	if msg.SpvHeight > spv.GetSpvHeight() {
 		log.Warn("OnProducersMsg msg.SpvHeight  ", msg.SpvHeight, "native spv height ", spv.GetSpvHeight())
+		return
+	}
+	if !p.IsProducer() {
+		log.Info("OnProducersMsg self is not producer", "self ", common.Bytes2Hex(p.account.PublicKeyBytes()))
 		return
 	}
 	if p.IsCurrentProducers(currentProducers) {
