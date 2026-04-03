@@ -326,7 +326,6 @@ func (p *Pbft) subscribeEvent() {
 			if p.needChangeNextTurnProducers {
 				p.changeNextTurnProduces(p.GetBlockChain().CurrentBlock().NumberU64() + 1)
 				p.needChangeNextTurnProducers = false
-				atomic.StoreInt32(&p.epochTransitionPending, 0)
 			}
 		case dpos.ETSmallCroTx:
 			if croTx, ok := e.Data.(*smallcrosstx.ETSmallCrossTx); ok {
@@ -969,7 +968,7 @@ func (p *Pbft) changeViewLoop() {
 func (p *Pbft) Recover() {
 	if p.IsCurrent == nil || p.account == nil || p.isRecovering ||
 		!p.dispatcher.IsProducer(p.account.PublicKeyBytes()) {
-		p.dispatcher.GetConsensusView().DumpInfo()
+		// p.dispatcher.GetConsensusView().DumpInfo()
 		p.isRecovering = false
 		return
 	}
@@ -1123,6 +1122,10 @@ func (p *Pbft) OnViewChanged(isOnDuty bool, force bool) {
 	if !force {
 		p.dispatcher.CleanProposals(true)
 		if p.IsCurrent() && isOnDuty {
+			if atomic.LoadInt32(&p.epochTransitionPending) == 1 {
+				log.Info("epochTransitionPending, skip startMine")
+				return
+			}
 			log.Info("---------startMine()-------")
 			p.dispatcher.GetConsensusView().SetReady()
 			p.StartMine()

@@ -411,7 +411,6 @@ func (p *Pbft) OnInsertBlock(block *types.Block, isInit bool) bool {
 		"height", block.NumberU64())
 	if p.needChangeNextTurnProducers {
 		p.needChangeNextTurnProducers = false
-		atomic.StoreInt32(&p.epochTransitionPending, 0)
 		curProducers := p.dispatcher.GetConsensusView().GetProducers()
 		isSame := p.dispatcher.GetConsensusView().IsSameProducers(curProducers)
 		if !isSame {
@@ -419,15 +418,15 @@ func (p *Pbft) OnInsertBlock(block *types.Block, isInit bool) bool {
 			p.changeNextTurnProduces(nextHeight)
 			p.dispatcher.ResetConsensusForEpochTransition(nextHeight, block.Time())
 			go func() {
-				p.AnnounceDAddr()
 				p.Recover()
+				p.AnnounceDAddr()
 			}()
-			go func() {
-				time.Sleep(time.Millisecond * 100)
-				if p.IsProducer() {
-					p.broadChangeProducersMsg(nextHeight)
-				}
-			}()
+			// go func() {
+			// 	time.Sleep(time.Millisecond * 100)
+			// 	if p.IsProducer() {
+			// 		p.broadChangeProducersMsg(nextHeight)
+			// 	}
+			// }()
 		} else {
 			log.Info("For the same batch of producers, no need to change current producers")
 		}
@@ -570,12 +569,15 @@ func (p *Pbft) OnResponseBlocks(id peer.PID, blockConfirms []*dmsg.BlockMsg) {
 }
 
 func (p *Pbft) OnRequestConsensus(id peer.PID, height uint64) {
-	log.Info("------- [OnRequestConsensus] -------")
 	if !p.IsProducer() {
-		log.Warn("------- not a producer -------")
+		log.Warn("------- [OnRequestConsensus] self is not a producer -------")
 		return
 	}
 
+	if !p.IsProducerByAccount(id[:]) {
+		log.Warn("------- [OnRequestConsensus] not a producer by account id -------", "id", id.String())
+		return
+	}
 	status := p.dispatcher.HelpToRecoverAbnormal(id, height, p.chain.CurrentHeader().Height())
 	if status != nil {
 		msg := &dmsg.ResponseConsensus{Consensus: *status}
@@ -831,8 +833,8 @@ func (p *Pbft) recoverAbnormalState() bool {
 }
 
 func (p *Pbft) OnRecoverTimeout() {
+	atomic.StoreInt32(&p.epochTransitionPending, 0)
 	started := p.finishRecoverStarted()
-	fmt.Println("OnRecoverTimeout finishRecoverStarted", started)
 	if !started {
 		return
 	}
