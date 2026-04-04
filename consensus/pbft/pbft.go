@@ -554,6 +554,7 @@ func (p *Pbft) Prepare(chain consensus.ChainReader, header *types.Header) error 
 		return errUnauthorizedSigner
 	}
 	if atomic.LoadInt32(&p.epochTransitionPending) == 1 {
+		p.enableViewLoop = false
 		return ErrEpochTransitionPending
 	}
 	p.Start(parent.Time)
