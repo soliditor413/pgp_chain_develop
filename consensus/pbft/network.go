@@ -871,8 +871,8 @@ func (p *Pbft) doRecoverLocked() {
 	for _, v := range p.statusMap[maxCountMaxViewOffset] {
 		if status == nil {
 			if v.ConsensusStatus == dpos.ConsensusReady {
-				p.notHandledProposal = make(map[string]struct{})
-				return
+				//p.notHandledProposal = make(map[string]struct{})
+				//return
 			}
 			status = v
 		}
