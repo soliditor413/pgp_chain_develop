@@ -68,30 +68,25 @@ func (p *Pbft) StartProposal(block *types.Block) (*payload.DPOSProposal, error) 
 }
 
 func (p *Pbft) BroadMessage(msg elap2p.Message) {
-	peers := p.network.DumpPeersInfo()
-
-	for _, peer := range peers {
-		pid := peer.PID[:]
-		producer := p.dispatcher.GetConsensusView().IsProducers(pid)
-		if producer == false {
-			continue
-		}
-		p.network.SendMessageToPeer(peer.PID, msg)
+	// peers := p.network.DumpPeersInfo()
+	producers := p.GetCurrentProducers()
+	for _, producer := range producers {
+		pid := peer.PID{}
+		copy(pid[:], producer)
+		p.network.SendMessageToPeer(pid, msg)
 	}
 }
 
 func (p *Pbft) BroadMessageExcept(msg elap2p.Message, exceptPeer peer.PID) {
-	peers := p.network.DumpPeersInfo()
-	for _, peer := range peers {
-		pid := peer.PID[:]
-		producer := p.dispatcher.GetConsensusView().IsProducers(pid)
-		if producer == false {
+	// peers := p.network.DumpPeersInfo()
+	peers := p.GetCurrentProducers()
+	for _, producer := range peers {
+		if bytes.Equal(producer, exceptPeer[:]) {
 			continue
 		}
-		if peer.PID.Equal(exceptPeer) {
-			continue
-		}
-		p.network.SendMessageToPeer(peer.PID, msg)
+		pid := peer.PID{}
+		copy(pid[:], producer)
+		p.network.SendMessageToPeer(pid, msg)
 	}
 }
 
