@@ -967,14 +967,19 @@ func (p *Pbft) changeViewLoop() {
 }
 
 func (p *Pbft) Recover() {
-	if p.IsCurrent == nil || p.account == nil || p.isRecovering ||
-		!p.dispatcher.IsProducer(p.account.PublicKeyBytes()) {
-		// p.dispatcher.GetConsensusView().DumpInfo()
+	if p.IsCurrent == nil || p.account == nil || p.isRecovering {
+		p.isRecovering = false
+		return
+	}
+	if !p.dispatcher.IsProducer(p.account.PublicKeyBytes()) {
+		atomic.StoreInt32(&p.epochTransitionPending, 0)
+		p.setRecovered(true)
 		p.isRecovering = false
 		return
 	}
 	p.isRecovering = true
 	activePeersCount := 0
+	deadline := time.Now().Add(2 * time.Minute)
 	for {
 		activePeersCount, _ = p.HasPeersMajorityCount()
 		minCount := p.dispatcher.GetConsensusView().GetMajorityCount()
@@ -983,6 +988,13 @@ func (p *Pbft) Recover() {
 			activePeersCount >= minCount {
 			log.Info("----- PostRecoverTask --------", "GetActivePeers", len(p.network.GetActivePeers()), "total", len(p.dispatcher.GetConsensusView().GetProducers()))
 			go p.network.PostRecoverTask()
+			p.isRecovering = false
+			return
+		}
+		if time.Now().After(deadline) {
+			log.Warn("Recover timeout after 2 minutes, clearing pending state")
+			atomic.StoreInt32(&p.epochTransitionPending, 0)
+			p.setRecovered(true)
 			p.isRecovering = false
 			return
 		}
