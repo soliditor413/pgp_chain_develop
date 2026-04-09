@@ -117,6 +117,9 @@ func (p *Pbft) GetArbiterPeersInfo() []peerInfo {
 	if p.account == nil {
 		return nil
 	}
+	if !p.IsProducer() {
+		return []peerInfo{}
+	}
 
 	peers := p.network.DumpPeersInfo()
 
@@ -140,6 +143,9 @@ func (p *Pbft) GetArbiterPeersInfo() []peerInfo {
 func (p *Pbft) GetAllArbiterPeersInfo() []*p2p.PeerInfo {
 	if p.account == nil {
 		return nil
+	}
+	if !p.IsProducer() {
+		return []*p2p.PeerInfo{}
 	}
 	return p.network.DumpPeersInfo()
 }
