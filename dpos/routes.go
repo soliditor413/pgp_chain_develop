@@ -342,7 +342,6 @@ cleanup:
 
 func (r *Routes) handlePeersMsg(state *state, peers []peer.PID) {
 	// Compare current peers and new peers to find the difference.
-	fmt.Println("<<<<<<< handlePeersMsg >>>>>>", "peers ", peers)
 	var newPeers = make(map[peer.PID]struct{})
 	for _, pid := range peers {
 		newPeers[pid] = struct{}{}

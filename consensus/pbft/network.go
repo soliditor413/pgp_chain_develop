@@ -430,6 +430,8 @@ func (p *Pbft) OnInsertBlock(block *types.Block, isInit bool) bool {
 			// }()
 		} else {
 			log.Info("For the same batch of producers, no need to change current producers")
+			atomic.StoreInt32(&p.epochTransitionPending, 0)
+			p.setRecovered(true)
 		}
 		spv.InitNextTurnDposInfo()
 		return !isSame
