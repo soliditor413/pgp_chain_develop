@@ -19,7 +19,7 @@ import (
 )
 
 const validatorABI = `[{"inputs":[],"name":"getNextValidatorSet","outputs":[{"internalType":"bytes[]","name":"validators","type":"bytes[]"},{"internalType":"uint8","name":"totalValidatorsCount","type":"uint8"},{"internalType":"uint256","name":"workingHeight","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"epoch","type":"uint256"}],"name":"getCachedValidatorSet","outputs":[{"internalType":"bytes[]","name":"validators","type":"bytes[]"},{"internalType":"uint8","name":"totalValidatorsCount","type":"uint8"},{"internalType":"uint256","name":"workingHeight","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"epoch","type":"uint256"}],"name":"isValidatorSetCached","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"}]`
-const BLOCKS_PER_EPOCH = 18 //TODO test for jianbin,should change to 36
+const BLOCKS_PER_EPOCH = 36
 
 // ContractCaller abstracts contract call capability so that BposValidator
 // can call the validator contract in-process (via ethapi) without depending
