@@ -548,8 +548,8 @@ func SubscriptEvent(eth *Ethereum, engine consensus.Engine) {
 				eth.blockchain.ResetChainEventTimer()
 			case <-startDefaultProducerEvt:
 				//TODO for test need open
-				//pbftEngine := engine.(*pbft.Pbft)
-				//StartDefaultProducers(pbftEngine, eth.blockchain.Config(), eth.blockchain.CurrentBlock())
+				pbftEngine := engine.(*pbft.Pbft)
+				StartDefaultProducers(pbftEngine, eth.blockchain.Config(), eth.blockchain.CurrentBlock())
 			case <-eth.stopChan:
 				return
 			}
