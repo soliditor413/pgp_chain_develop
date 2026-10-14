@@ -499,6 +499,23 @@ func (p *Pbft) verifySeal(chain consensus.ChainReader, header *types.Header, _ [
 	if err != nil {
 		return err
 	}
+
+	// Bind the confirm to this exact block: the proposal embedded in the
+	// confirm must commit to the seal hash of the header being verified.
+	// Without this check any confirm captured from the network could be
+	// attached to an arbitrary forged block.
+	sealHash := p.SealHash(header)
+	proposalBlockHash, err := ecom.Uint256FromBytes(sealHash.Bytes())
+	if err != nil {
+		return err
+	}
+	if !confirm.Proposal.BlockHash.IsEqual(*proposalBlockHash) {
+		log.Warn("verify seal confirm block hash mismatch", "height", number,
+			"confirm.BlockHash", confirm.Proposal.BlockHash.String(),
+			"sealHash", sealHash.String())
+		return ErrInvalidConfirm
+	}
+
 	err = p.verifyConfirm(&confirm, header.Nonce.Uint64(), int64(header.Time))
 	if err != nil {
 		return err
@@ -513,7 +530,10 @@ func (p *Pbft) verifySeal(chain consensus.ChainReader, header *types.Header, _ [
 
 		if confirm.Proposal.ViewOffset < oldConfirm.Proposal.ViewOffset && number < chain.CurrentHeader().Number.Uint64() {
 			log.Warn("verify seal chain fork", "oldViewOffset", oldConfirm.Proposal.ViewOffset, "newViewOffset", confirm.Proposal.ViewOffset, "height", number)
-			//return errChainForkBlock
+			// A block at an already confirmed height carrying a confirm with a
+			// smaller view offset than the canonical one is a fork attempt and
+			// must be rejected to prevent double finality at the same height.
+			return errChainForkBlock
 		}
 		if confirm.Proposal.ViewOffset == oldConfirm.Proposal.ViewOffset && oldHeader.Hash() != header.Hash() {
 			log.Error("double sign block", "oldHeader.Hash()", oldHeader.Hash().String(), "header.Hash()", header.Hash().String(), "old.miner", oldHeader.Coinbase.String(), "newHeader.Miner", header.Coinbase.String(), "current best height", p.CurrentBlock().NumberU64())
@@ -582,7 +602,9 @@ func (p *Pbft) Finalize(chain consensus.ChainReader, header *types.Header, state
 }
 
 func (p *Pbft) judgeNeedChangeNextTurnProducers(height uint64) {
-	if !p.IsCurrent() {
+	// IsCurrent is injected by the node wiring; guard against a nil stub to
+	// avoid a panic in the sealing goroutine during Finalize.
+	if p.IsCurrent == nil || !p.IsCurrent() {
 		return
 	}
 	if p.bPosValidator != nil && p.bPosValidator.IsBPosFork(height) {
@@ -631,6 +653,14 @@ func (p *Pbft) Seal(chain consensus.ChainReader, block *types.Block, results cha
 	}
 
 	if block.NumberU64() <= p.dispatcher.GetFinishedHeight() {
+		return ErrAlreadyConfirmedBlock
+	}
+	// Vote lock (self-proposal): if we already hold a valid confirm for this
+	// height, the height is final and we must not propose a competing block,
+	// even if our local finishedHeight has not caught up yet (e.g. after a
+	// network partition).
+	if _, hasConfirm := p.blockPool.GetConfirmByHeight(block.NumberU64()); hasConfirm {
+		log.Warn("Seal: height already has a confirm, refuse to propose", "height", block.NumberU64())
 		return ErrAlreadyConfirmedBlock
 	}
 	if !p.IsProducer() {
@@ -867,6 +897,17 @@ func (p *Pbft) SignersCount() int {
 	return count
 }
 
+// GetIrreversibleHeight returns the highest block height that has been
+// finalized by PBFT consensus (i.e. endorsed by >= 2/3 of producers).
+// Blocks at or below this height must never be reverted by a reorg.
+// It returns 0 when the dispatcher is not initialized yet.
+func (p *Pbft) GetIrreversibleHeight() uint64 {
+	if p.dispatcher == nil {
+		return 0
+	}
+	return p.dispatcher.GetFinishedHeight()
+}
+
 // SealHash returns the hash of a block prior to it being sealed.
 func SealHash(header *types.Header) (hash common.Hash) {
 	hasher := sha3.NewLegacyKeccak256()
@@ -1075,17 +1116,37 @@ func (p *Pbft) broadConfirmMsg(confirm *payload.Confirm, height uint64) {
 }
 
 func (p *Pbft) verifyConfirm(confirm *payload.Confirm, elaHeight uint64, timeStamp int64) error {
+	var producers [][]byte
 	minSignCount := 0
 	if elaHeight == 0 {
+		// CRC consensus mode: votes must come from the CRC arbiter set.
+		if spv.SpvService != nil {
+			producers = spv.GetCRCPublicKeys(spv.GetSpvHeight())
+		}
+		if len(producers) == 0 {
+			// The SPV service is unavailable (unit tests, or an SPV outage
+			// on a running node). Fall back to the producer set of the
+			// local consensus view rather than panic or silently skipping
+			// the membership check: the set still originates from the
+			// consensus state, never from untrusted network input.
+			log.Warn("[verifyConfirm] crc producers unavailable from spv, fall back to consensus view producers")
+			producers = p.dispatcher.GetConsensusView().GetProducers()
+		}
+		if len(producers) == 0 {
+			return errors.New("[verifyConfirm] can not determine producer set for confirm verification")
+		}
 		minSignCount = p.dispatcher.GetConsensusView().GetCRMajorityCount()
 	} else {
-		_, count, err := spv.GetProducers(elaHeight)
+		list, count, err := spv.GetProducers(elaHeight)
 		if err != nil {
 			return err
 		}
+		producers = list
 		minSignCount = p.dispatcher.GetConsensusView().GetMajorityCountByTotalSigners(count)
 	}
-	err := dpos.CheckConfirm(confirm, minSignCount)
+	// CheckConfirm now enforces producer membership, vote deduplication and
+	// sponsor membership, so a confirm can not be forged by arbitrary keys.
+	err := dpos.CheckConfirm(confirm, producers, minSignCount)
 	return err
 }
 

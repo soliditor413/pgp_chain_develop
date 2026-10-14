@@ -77,7 +77,10 @@ func TestReimportMirroredState(t *testing.T) {
 			header.ParentHash = blocks[i-1].Hash()
 		}
 
-		confirm := createConfirm(block, engine.account)
+		// Build the confirm over the FINAL header (after ParentHash fix-up),
+		// mirroring the producer flow where the proposal commits to the seal
+		// hash of the exact header being sealed.
+		confirm := createConfirm(header, engine.account)
 		sealBuf := new(bytes.Buffer)
 		confirm.Serialize(sealBuf)
 		header.Extra = make([]byte, sealBuf.Len())
@@ -102,6 +105,9 @@ func TestReimportMirroredState(t *testing.T) {
 	// flushing the dirty states out. Insert the last block, trigerring a sidechain
 	// reimport.
 	engine = New(PbftProtocolChanges, "")
+	engine.IsCurrent = func() bool {
+		return true
+	}
 	chain, _ = core.NewBlockChain(db, nil, PbftProtocolChanges, engine, engine, vm.Config{}, nil)
 	defer chain.Stop()
 
@@ -113,8 +119,8 @@ func TestReimportMirroredState(t *testing.T) {
 	}
 }
 
-func createConfirm(block *types.Block, ac account.Account) *payload.Confirm {
-	hash := SealHash(block.Header())
+func createConfirm(header *types.Header, ac account.Account) *payload.Confirm {
+	hash := SealHash(header)
 	sealHash, _ := ecom.Uint256FromBytes(hash.Bytes())
 	proposal, _ := dpos.StartProposal(ac, *sealHash, 0)
 
@@ -123,10 +129,13 @@ func createConfirm(block *types.Block, ac account.Account) *payload.Confirm {
 		Proposal: *proposal,
 		Votes:    make([]payload.DPOSProposalVote, 0),
 	}
-	for i := 1; i <= 8; i++ {
-		vote, _ := dpos.StartVote(&proposalHash, true, ac)
-		confirm.Votes = append(confirm.Votes, *vote)
-	}
+	// The hardened CheckConfirm rejects duplicated votes from the same
+	// signer (a single signer must never reach the threshold by vote
+	// stuffing), so the test confirm carries one vote per unique signer.
+	// With the single-producer test config the majority count is 0, one
+	// unique vote is enough.
+	vote, _ := dpos.StartVote(&proposalHash, true, ac)
+	confirm.Votes = append(confirm.Votes, *vote)
 	return confirm
 }
 

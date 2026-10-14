@@ -293,6 +293,10 @@ func buildFlags(env build.Environment) (flags []string) {
 	if runtime.GOOS == "darwin" {
 		ld = append(ld, "-s")
 	}
+	// Disable the Go 1.23+ linkname check so that dependencies which use
+	// //go:linkname to reference runtime internals (e.g. fjl/memsize) can
+	// still be linked.
+	ld = append(ld, "-checklinkname=0")
 
 	if len(ld) > 0 {
 		flags = append(flags, "-ldflags", strings.Join(ld, " "))

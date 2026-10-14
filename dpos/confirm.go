@@ -6,22 +6,55 @@
 package dpos
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 
+	"github.com/elastos/Elastos.ELA/common"
 	"github.com/elastos/Elastos.ELA/core/types/payload"
 )
 
-func CheckConfirm(confirm *payload.Confirm, minSignCount int) error {
+// CheckConfirm verifies that a confirm is genuinely endorsed by the producer
+// set. Besides signature validity it enforces:
+//  1. the proposal sponsor is a member of the given producer set;
+//  2. every vote signer is a member of the given producer set;
+//  3. no signer is counted twice (duplicated votes are rejected);
+//  4. the number of unique valid producer votes reaches minSignCount.
+//
+// producers must be the authoritative producer (arbiter) set for the height
+// the confirmed block belongs to. Empty or all-zero entries are ignored.
+func CheckConfirm(confirm *payload.Confirm, producers [][]byte, minSignCount int) error {
+	if len(producers) == 0 {
+		return errors.New("[CheckConfirm] empty producer set, can not verify confirm")
+	}
+
+	producerSet := make(map[string]struct{}, len(producers))
+	for _, producer := range producers {
+		if len(producer) == 0 || bytes.Equal(producer, make([]byte, len(producer))) {
+			continue
+		}
+		producerSet[string(producer)] = struct{}{}
+	}
+	if len(producerSet) == 0 {
+		return errors.New("[CheckConfirm] producer set has no valid member")
+	}
+
+	// The sponsor of the proposal must be a producer of the set.
+	if _, ok := producerSet[string(confirm.Proposal.Sponsor)]; !ok {
+		str := fmt.Sprintf("[CheckConfirm] proposal sponsor %s is not in producer set",
+			common.BytesToHexString(confirm.Proposal.Sponsor))
+		Error(str)
+		return errors.New(str)
+	}
+
 	err := CheckProposal(&confirm.Proposal)
 	if err != nil {
 		return err
 	}
-	if len(confirm.Votes) < minSignCount {
-		str := fmt.Sprintf("[CheckConfirm] error, need %d votes", minSignCount)
-		return errors.New(str)
-	}
+
 	proposalHash := confirm.Proposal.Hash()
+	signedProducers := make(map[string]struct{}, len(confirm.Votes))
+	validVotes := 0
 	for _, vote := range confirm.Votes {
 		if !vote.Accept {
 			Error("confirm contains reject vote", vote.Hash().String())
@@ -35,11 +68,39 @@ func CheckConfirm(confirm *payload.Confirm, minSignCount int) error {
 				"invalid vote")
 		}
 
+		// Only votes from producers of the set count towards finality.
+		if _, ok := producerSet[string(vote.Signer)]; !ok {
+			str := fmt.Sprintf("[CheckConfirm] vote signer %s is not in producer set",
+				common.BytesToHexString(vote.Signer))
+			Error(str)
+			return errors.New(str)
+		}
+
+		// Reject duplicated votes from the same signer.
+		if _, ok := signedProducers[string(vote.Signer)]; ok {
+			str := fmt.Sprintf("[CheckConfirm] duplicated vote from signer %s",
+				common.BytesToHexString(vote.Signer))
+			Error(str)
+			return errors.New(str)
+		}
+
 		if err := CheckVote(&vote); err != nil {
 			Error("check vote error", "error", err.Error())
 			return errors.New("[CheckConfirm] confirm contain invalid " +
 				"vote: " + err.Error())
 		}
+
+		signedProducers[string(vote.Signer)] = struct{}{}
+		validVotes++
+	}
+
+	// Count unique producer votes only after membership and duplication
+	// checks, so a single signer can never reach the threshold alone.
+	if validVotes < minSignCount {
+		str := fmt.Sprintf("[CheckConfirm] error, need %d votes, got %d unique producer votes",
+			minSignCount, validVotes)
+		Error(str)
+		return errors.New(str)
 	}
 
 	return nil

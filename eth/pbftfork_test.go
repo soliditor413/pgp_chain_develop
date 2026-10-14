@@ -61,7 +61,7 @@ func TestBlockfork(t *testing.T) {
 		if i > 0 {
 			header.ParentHash = blocks[i-1].Hash()
 		}
-		var confirm = createConfirm(block, engine.GetDposAccount(), 1)
+		var confirm = createConfirm(header, engine.GetDposAccount(), 1)
 		sealBuf := new(bytes.Buffer)
 		confirm.Serialize(sealBuf)
 		header.Extra = make([]byte, sealBuf.Len())
@@ -91,7 +91,7 @@ func TestBlockfork(t *testing.T) {
 		if i > 0 {
 			header.ParentHash = blocks[i-1].Hash()
 		}
-		var confirm = createConfirm(block, engine.GetDposAccount(), 2)
+		var confirm = createConfirm(header, engine.GetDposAccount(), 2)
 		sealBuf := new(bytes.Buffer)
 		confirm.Serialize(sealBuf)
 		header.Extra = make([]byte, sealBuf.Len())
@@ -112,8 +112,12 @@ func TestBlockfork(t *testing.T) {
 	assert.NotEqual(t, b1.Hash().String(), b2.Hash().String())
 }
 
-func createConfirm(block *types.Block, ac account.Account, viewOffset uint32) *payload.Confirm {
-	hash := pbft.SealHash(block.Header())
+func createConfirm(header *types.Header, ac account.Account, viewOffset uint32) *payload.Confirm {
+	// Bind the confirm to the *final* header (ParentHash already fixed up by the
+	// caller). The hardened verifySeal compares the proposal hash against
+	// SealHash(header), so a confirm built over a stale header would be rejected
+	// as an invalid confirm.
+	hash := pbft.SealHash(header)
 	sealHash, _ := ecom.Uint256FromBytes(hash.Bytes())
 	proposal, _ := dpos.StartProposal(ac, *sealHash, viewOffset)
 	proposalHash := proposal.Hash()
@@ -121,9 +125,10 @@ func createConfirm(block *types.Block, ac account.Account, viewOffset uint32) *p
 		Proposal: *proposal,
 		Votes:    make([]payload.DPOSProposalVote, 0),
 	}
-	for i := 1; i <= 8; i++ {
-		vote, _ := dpos.StartVote(&proposalHash, true, ac)
-		confirm.Votes = append(confirm.Votes, *vote)
-	}
+	// The hardened CheckConfirm rejects duplicated votes from the same signer
+	// (a single signer must never reach the threshold by vote stuffing), so the
+	// test confirm carries exactly one vote per unique signer.
+	vote, _ := dpos.StartVote(&proposalHash, true, ac)
+	confirm.Votes = append(confirm.Votes, *vote)
 	return confirm
 }

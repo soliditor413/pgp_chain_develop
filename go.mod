@@ -16,10 +16,8 @@ require (
 	github.com/dop251/goja v0.0.0-20220405120441-9037c2b61cbf
 	github.com/edsrzf/mmap-go v1.1.0
 	github.com/elastic/gosigar v0.14.2
-	github.com/elastos/Elastos.ELA v0.9.8-0.20230822071649-363670e32ee4
 	github.com/elastos/Elastos.ELA.SPV v0.1.1-0.20240904064254-31ee1cd78518
 	github.com/fatih/color v1.13.0
-	github.com/fjl/memsize v0.0.1
 	github.com/gballet/go-libpcsclite v0.0.0-20191108122812-4678299bea08
 	github.com/go-stack/stack v1.8.1
 	github.com/golang/protobuf v1.5.2
@@ -49,17 +47,22 @@ require (
 	github.com/status-im/keycard-go v0.0.0-20220906070205-e43cb0f06ae9
 	github.com/steakknife/bloomfilter v0.0.0-20180922174646-6819c0d2a570
 	github.com/stretchr/testify v1.8.0
-	github.com/syndtr/goleveldb v1.0.1-0.20210305035536-64b5b1c73954
+	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 	github.com/tyler-smith/go-bip39 v1.1.0
 	github.com/wsddn/go-ecdh v0.0.0-20161211032359-48726bab9208
-	golang.org/x/crypto v0.0.0-20220829220503-c86fa9a7ed90
-	golang.org/x/net v0.0.0-20220826154423-83b083e8dc8b
+	golang.org/x/crypto v0.17.0
+	golang.org/x/net v0.10.0
 	golang.org/x/sync v0.0.0-20220819030929-7fc1605a5dde
-	golang.org/x/sys v0.0.0-20220829200755-d48e67d00261
-	golang.org/x/text v0.3.8
+	golang.org/x/sys v0.15.0
+	golang.org/x/text v0.14.0
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce
 	gopkg.in/urfave/cli.v1 v1.20.0
+)
+
+require (
+	github.com/elastos/Elastos.ELA v0.9.8-0.20230822071649-363670e32ee4
+	github.com/fjl/memsize v0.0.2
 )
 
 require (
@@ -92,10 +95,13 @@ require (
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/steakknife/hamming v0.0.0-20180906055917-c99c65617cd3 // indirect
 	github.com/urfave/cli v1.22.5 // indirect
-	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
+	golang.org/x/term v0.15.0 // indirect
 	golang.org/x/time v0.0.0-20220722155302-e5dcc9cfc0b9 // indirect
+	golang.org/x/xerrors v0.0.0-20220517211312-f3a8303e98df // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/sourcemap.v1 v1.0.5 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gotest.tools/v3 v3.4.0 // indirect
 )
+
+replace github.com/elastos/Elastos.ELA => ./third_party/Elastos.ELA

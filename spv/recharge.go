@@ -23,6 +23,9 @@ type RechargeDatas []*RechargeData
 func GetRechargeDataByTxhash(elaHash string) (RechargeDatas, *big.Int, error) {
 	totalFee := big.NewInt(0)
 	rechargeDatas := make(RechargeDatas, 0)
+	if len(elaHash) < 2 {
+		return rechargeDatas, totalFee, errors.New("ela hash too short")
+	}
 	if elaHash[0:2] == "0x" {
 		elaHash = elaHash[2:]
 	}
@@ -57,7 +60,9 @@ func GetRechargeDataByTxhash(elaHash string) (RechargeDatas, *big.Int, error) {
 
 	}
 
-	memos, err := spvTransactiondb.Get([]byte(elaHash + "Input"))
+	// The Input (memo) column may be absent for legacy (v0) transactions;
+	// tolerate the missing key as before and validate the column length below.
+	memos, _ := spvTransactiondb.Get([]byte(elaHash + "Input"))
 
 	addrs := strings.Split(string(addrss), ",")
 	fees := strings.Split(string(feeValues), ",")
@@ -65,6 +70,12 @@ func GetRechargeDataByTxhash(elaHash string) (RechargeDatas, *big.Int, error) {
 	targetMemos := strings.Split(string(memos), ",")
 	if len(addrs) != len(fees) || len(fees) != len(amounts) || len(amounts) != len(addrs) {
 		return rechargeDatas, totalFee, errors.New("recharge data error : " + elaHash)
+	}
+	// memos must align with the other columns as well: for legacy (v0)
+	// transactions the stored input can be empty, and indexing targetMemos
+	// beyond its length would panic every node executing the recharge.
+	if len(targetMemos) != len(fees) {
+		return rechargeDatas, totalFee, errors.New("recharge memo data error : " + elaHash)
 	}
 
 	size := len(fees)

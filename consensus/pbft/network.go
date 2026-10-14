@@ -37,6 +37,13 @@ import (
 
 const maxViewOffset = 100
 
+// maxOnBlockSleepDelay bounds the time OnBlockReceived is allowed to wait
+// for a block's seal time. The block timestamp is peer-controlled and not
+// yet verified at that point; an unbounded sleep would let any peer freeze
+// the serial dpos consensus message loop. One sealing window (10s) is
+// generous enough for honest blocks.
+const maxOnBlockSleepDelay = 10 * time.Second
+
 func (p *Pbft) StartProposal(block *types.Block) (*payload.DPOSProposal, error) {
 	sealHash := p.SealHash(block.Header())
 	log.Info("StartProposal", "block hash:", sealHash.String())
@@ -327,7 +334,10 @@ func (p *Pbft) OnBlock(id peer.PID, block *dmsg.BlockMsg) {
 
 	err := b.DecodeRLP(rlp.NewStream(bytes.NewBuffer(block.GetData()), 0))
 	if err != nil {
-		panic("OnBlock Decode Block Msg error:" + err.Error())
+		// Never panic on peer-controlled data: a single malformed message
+		// must not crash the consensus node.
+		log.Error("OnBlock decode block msg error", "error", err, "peer", id.String())
+		return
 	}
 	if len(b.Extra()) > extraVanity {
 		p.OnBlockReceived(id, block, true)
@@ -684,6 +694,13 @@ func (p *Pbft) OnProposalReceived(id peer.PID, proposal *payload.DPOSProposal) {
 	} else if isBadProposal {
 		log.Info("bad proposal reject")
 		voteMsg = p.dispatcher.RejectProposal(proposal, p.account)
+	} else if p.hasConfirmedCompetitor(proposal) {
+		// Vote lock: we already hold a valid confirm for a DIFFERENT block at
+		// this height. Voting accept here would make us double-sign an
+		// already finalized height, so reject the competing proposal instead.
+		log.Warn("reject proposal: height already finalized with another block",
+			"proposal", proposal.Hash().String())
+		voteMsg = p.dispatcher.RejectProposal(proposal, p.account)
 	} else {
 		voteMsg = p.dispatcher.AcceptProposal(proposal, p.account)
 	}
@@ -771,6 +788,22 @@ func (p *Pbft) OnChangeView() {
 			p.OnResponseResetViewReceived(m)
 		}
 	}
+}
+
+// hasConfirmedCompetitor reports whether the block pool already holds a
+// valid confirm for a DIFFERENT block at the same height as the given
+// proposal. It is used to enforce the vote lock that prevents honest nodes
+// from double-signing an already finalized height.
+func (p *Pbft) hasConfirmedCompetitor(proposal *payload.DPOSProposal) bool {
+	block, ok := p.blockPool.GetBlock(proposal.BlockHash)
+	if !ok || block == nil {
+		return false
+	}
+	confirmed, hasConfirm := p.blockPool.GetConfirmByHeight(block.GetHeight())
+	if !hasConfirm {
+		return false
+	}
+	return !confirmed.Proposal.BlockHash.IsEqual(proposal.BlockHash)
 }
 
 func (p *Pbft) OnBadNetwork() {
@@ -947,10 +980,25 @@ func (p *Pbft) OnBlockReceived(id peer.PID, b *dmsg.BlockMsg, confirmed bool) {
 
 	err := block.DecodeRLP(rlp.NewStream(bytes.NewBuffer(b.GetData()), 0))
 	if err != nil {
-		panic("OnBlock Decode Block Msg error:" + err.Error())
+		// Never panic on peer-controlled data: a single malformed message
+		// must not crash the consensus node.
+		log.Error("OnBlockReceived decode block msg error", "error", err, "peer", id.String())
+		return
 	}
 
+	// The block timestamp comes from the peer and is not verified yet.
+	// Sleeping on it without a bound would let any peer freeze the whole
+	// consensus message loop (all dpos messages are processed serially by a
+	// single goroutine), so clamp the delay to one sealing window.
 	delay := time.Unix(int64(block.Time()), 0).Sub(p.dispatcher.GetNowTime())
+	if delay < 0 {
+		delay = 0
+	}
+	if delay > maxOnBlockSleepDelay {
+		log.Warn("[OnBlockReceived] block time too far in the future, clamp wait delay",
+			"delay", delay, "height", block.NumberU64())
+		delay = maxOnBlockSleepDelay
+	}
 	log.Info("[OnBlockReceived] wait seal time", "delay", delay)
 	time.Sleep(delay)
 

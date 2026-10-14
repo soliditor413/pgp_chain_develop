@@ -62,6 +62,13 @@ func OnSmallCrossTx(arbiters []string, total int, signature, rawTx string,
 	}
 	r := bytes.NewReader(buff)
 	txn, err := elatx.GetTransactionByBytes(r)
+	if err != nil {
+		log.Error("[Small-Transfer] GetTransactionByBytes error", "error", err)
+		return err
+	}
+	if txn == nil {
+		return errors.New("[Small-Transfer] invalid transaction bytes")
+	}
 	err = txn.Deserialize(r)
 	if err != nil {
 		log.Error("[Small-Transfer] Decode transaction error", err.Error())

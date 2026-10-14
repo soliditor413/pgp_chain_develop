@@ -1630,6 +1630,14 @@ func (c *verifySmallCrossTx) RequiredGas(input []byte) uint64 {
 }
 
 func (c *verifySmallCrossTx) Run(input []byte) ([]byte, error) {
+	// The payload after the 64-byte prefix must be a complete SmallCrossTx
+	// message (IsSmallCrossTxByData requires at least 1024 bytes). Reject
+	// short inputs explicitly: without this check len(input)-64 underflows
+	// and getData slices out of range, panicking every executing node.
+	if len(input) < 64+1024 {
+		log.Warn("verifySmallCrossTx: input too short", "len", len(input))
+		return false32Byte, nil
+	}
 	size := len(input) - 64
 	input = getData(input, 64, uint64(size))
 	rawTxid, rawTx, signatures, height := spv.IsSmallCrossTxByData(input)

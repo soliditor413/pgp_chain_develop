@@ -769,6 +769,10 @@ type DatabaseReader interface {
 // FindOutputFeeAndaddressByTxHash Finds the eth recharge address, recharge amount, and transaction fee based on the main chain hash.
 func FindOutputFeeAndaddressByTxHash(transactionHash string) (*big.Int, ethCommon.Address, *big.Int) {
 	var emptyaddr ethCommon.Address
+	if len(transactionHash) < 2 {
+		log.Error("FindOutputFeeAndaddressByTxHash: transaction hash too short")
+		return new(big.Int), emptyaddr, new(big.Int)
+	}
 	if transactionHash[0:2] == "0x" {
 		transactionHash = transactionHash[2:]
 	}
@@ -915,6 +919,9 @@ func IsFailedElaTx(elaTx string) (bool, error) {
 	failedMutex.Lock()
 	defer failedMutex.Unlock()
 
+	if len(elaTx) < 2 {
+		return false, errors.New("ela tx hash too short")
+	}
 	if elaTx[0:2] == "0x" {
 		elaTx = elaTx[2:]
 	}
@@ -928,7 +935,7 @@ func IsFailedElaTx(elaTx string) (bool, error) {
 
 	for _, txs := range failedTxList {
 		for _, txid := range txs {
-			if txid[0:2] == "0x" {
+			if len(txid) >= 2 && txid[0:2] == "0x" {
 				txid = txid[2:]
 			}
 			if txid == elaTx {
@@ -950,7 +957,7 @@ func IsFailedElaTx(elaTx string) (bool, error) {
 			continue
 		}
 		for _, txid := range txs {
-			if txid[0:2] == "0x" {
+			if len(txid) >= 2 && txid[0:2] == "0x" {
 				txid = txid[2:]
 			}
 			if txid == elaTx {
@@ -1142,10 +1149,64 @@ func IsSmallCrossTxByData(data []byte) (string, string, []string, uint64) {
 	return "", "", nil, 0
 }
 
+// SmallCrossTxMaxHeightGap is the maximum allowed distance (in pgp-chain
+// blocks) between the current chain height and the blockHeight carried by a
+// small cross-chain transaction. It prevents an attacker from selecting an
+// ancient arbiter set (e.g. one in which he once was a member) to satisfy
+// the signature threshold. 720 blocks is about 36 minutes at a 3s block
+// period, which is far longer than the normal signature collection time.
+const SmallCrossTxMaxHeightGap = 720
+
+// verifySmallCrossTxBinding checks that rawTxID is the real ELA transaction
+// hash of rawTx. Without this binding an attacker can attach an arbitrary
+// forged rawTx to any historical (already SPV-synchronized) rawTxID, pass
+// the "already verified" bypass below and poison every node's local
+// recharge database with fabricated outputs.
+func verifySmallCrossTxBinding(rawTxID, rawTx string) (bool, error) {
+	hashStr := strings.TrimPrefix(rawTxID, "0x")
+	if len(hashStr) != 64 {
+		return false, errors.New("invalid rawTxID length")
+	}
+	if _, err := hex.DecodeString(hashStr); err != nil {
+		return false, errors.New("rawTxID is not a hex string")
+	}
+	buff, err := hex.DecodeString(rawTx)
+	if err != nil {
+		return false, errors.New("rawTx is not a hex string")
+	}
+	r := bytes.NewReader(buff)
+	txn, err := elatx.GetTransactionByBytes(r)
+	if err != nil {
+		return false, err
+	}
+	if txn == nil {
+		return false, errors.New("invalid rawTx content")
+	}
+	if err := txn.Deserialize(r); err != nil {
+		return false, err
+	}
+	if !strings.EqualFold(txn.Hash().String(), hashStr) {
+		return false, nil
+	}
+	return true, nil
+}
+
 func VerifySmallCrossTx(rawTxID, rawTx string, signatures []string,
 	blockHeight uint64) (bool, error) {
 	if PbftEngine == nil {
 		return false, errors.New("PbftEngine is nil")
+	}
+	// Bind rawTxID to rawTx BEFORE any trust decision: the "already
+	// synchronized" bypass below is only safe when rawTx is provably the
+	// transaction identified by rawTxID.
+	bound, err := verifySmallCrossTxBinding(rawTxID, rawTx)
+	if err != nil {
+		log.Error("VerifySmallCrossTx binding check failed", "error", err)
+		return false, err
+	}
+	if !bound {
+		log.Error("VerifySmallCrossTx rawTxID does not match rawTx")
+		return false, errors.New("rawTxID does not match rawTx")
 	}
 	var blackAddr ethCommon.Address
 	fee, target, _ := FindOutputFeeAndaddressByTxHash(rawTxID)
@@ -1163,6 +1224,23 @@ func verifySmallCrossTxBySignature(rawTx string, signatures []string,
 		arbiters [][]byte
 		total    int
 	)
+	// The blockHeight selects the arbiter set used for verification. It must
+	// be recent: an attacker must not be able to pick an ancient arbiter set
+	// (e.g. one he was once a member of). The comparison is made against the
+	// current chain head at execution time, which is deterministic both for
+	// block import and for historical replay (the head is always the parent
+	// of the block being executed).
+	currentBlock := PbftEngine.CurrentBlock()
+	if currentBlock == nil {
+		return false, errors.New("current chain block is nil")
+	}
+	currentHeight := currentBlock.NumberU64()
+	if blockHeight > currentHeight+1 || (currentHeight > SmallCrossTxMaxHeightGap &&
+		blockHeight < currentHeight-SmallCrossTxMaxHeightGap) {
+		log.Error("verifySmallCrossTxBySignature blockHeight out of range",
+			"blockHeight", blockHeight, "currentHeight", currentHeight)
+		return false, errors.New("small cross tx block height is out of the recent window")
+	}
 	b := PbftEngine.GetBlockByHeight(blockHeight)
 	if b == nil {
 		return false, errors.New("current block is nil")
@@ -1182,6 +1260,10 @@ func verifySmallCrossTxBySignature(rawTx string, signatures []string,
 		log.Error("VerifySmallCrossTx DecodeString raw error", "error", err)
 		return false, err
 	}
+	// Each arbiter may contribute at most ONE vote towards the threshold.
+	// Counting duplicated signatures (or several signatures from the same
+	// arbiter) would reduce the 2/3+1 BFT threshold to a single signature.
+	verifiedArbiters := make(map[string]struct{}, len(arbiters))
 	count := 0
 	for _, signature := range signatures {
 		sig, err := hex.DecodeString(signature)
@@ -1190,6 +1272,10 @@ func verifySmallCrossTxBySignature(rawTx string, signatures []string,
 			continue
 		}
 		for _, pbk := range arbiters {
+			arbiterKey := string(pbk)
+			if _, ok := verifiedArbiters[arbiterKey]; ok {
+				continue
+			}
 			pubKey, err := elaCrypto.DecodePoint(pbk)
 			if err != nil {
 				log.Error("arbiter is error", "error", err)
@@ -1197,6 +1283,7 @@ func verifySmallCrossTxBySignature(rawTx string, signatures []string,
 			}
 			err = elaCrypto.Verify(*pubKey, buff, sig)
 			if err == nil {
+				verifiedArbiters[arbiterKey] = struct{}{}
 				count++
 				if count >= smallcrosstx.GetMaxArbitersSign(total) {
 					return true, nil

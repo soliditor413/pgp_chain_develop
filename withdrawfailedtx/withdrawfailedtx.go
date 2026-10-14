@@ -43,7 +43,7 @@ func FailedWithrawInit(datadir string, evtMux *event.TypeMux) {
 }
 
 func OnProcessFaildWithdrawTx(hash string) {
-	if hash[:2] == "0x" {
+	if len(hash) >= 2 && hash[:2] == "0x" {
 		hash = hash[2:]
 	}
 	if len(failedTxList[hash]) > 0 {
@@ -54,6 +54,9 @@ func OnProcessFaildWithdrawTx(hash string) {
 
 func ReceivedFailedWithdrawTx(hash string, signature string) error {
 	log.Info("[ReceivedFailedWithdrawTx]", "hash", hash, "signature", signature)
+	if len(hash) < 2 {
+		return errors.New("withdraw tx hash too short")
+	}
 	if hash[:2] == "0x" {
 		hash = hash[2:]
 	}
@@ -268,6 +271,10 @@ func GetWithdrawTxValue(txid string) (string, *big.Int, error) {
 	var ev PayloadReceived
 	var fromAccount string
 	for _, log := range receipt.Logs {
+		// A LOG0 entry (no topics) would panic on Topics[0]; skip it.
+		if len(log.Topics) < 2 {
+			continue
+		}
 		if log.Topics[0].String() == evtId {
 			fromAccount = log.Topics[1].String()
 			err := spv.ELAMinterABI.UnpackIntoInterface(&ev, "PayloadReceived", log.Data)
@@ -362,7 +369,7 @@ func broadFailedWithdrawEvt(hash, signature string) {
 //}
 
 func getFailedTx(txid string) ([]string, error) {
-	if txid[:2] == "0x" {
+	if len(txid) >= 2 && txid[:2] == "0x" {
 		txid = txid[2:]
 	}
 	list := failedTxList[txid]
@@ -373,7 +380,7 @@ func getFailedTx(txid string) ([]string, error) {
 }
 
 func IsVerifiedWithdrawTx(scTxID string) bool {
-	if scTxID[:2] == "0x" {
+	if len(scTxID) >= 2 && scTxID[:2] == "0x" {
 		scTxID = scTxID[2:]
 	}
 	verifiedArbiterList := verifiedArbiter[scTxID]
@@ -388,7 +395,7 @@ func IsVerifiedWithdrawTx(scTxID string) bool {
 }
 
 func GetVerifiedWithdrawTxValue(txid string) (*common.Address, *big.Int, []byte, error) {
-	if txid[:2] == "0x" {
+	if len(txid) >= 2 && txid[:2] == "0x" {
 		txid = txid[2:]
 	}
 	if !IsVerifiedWithdrawTx(txid) {

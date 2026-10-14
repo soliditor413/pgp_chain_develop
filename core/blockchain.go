@@ -114,6 +114,15 @@ const (
 	IrreversibleHeight int = 6
 )
 
+// irreversibleEngine is implemented by consensus engines that can report the
+// highest height finalized by BFT consensus (currently the PBFT engine).
+// Blocks at or below this height must never be reverted by a reorg.
+// Declared here (structural typing) to avoid an import cycle between core
+// and consensus/pbft.
+type irreversibleEngine interface {
+	GetIrreversibleHeight() uint64
+}
+
 // CacheConfig contains the configuration values for the trie caching/pruning
 // that's resident in a blockchain.
 type CacheConfig struct {
@@ -2109,6 +2118,25 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 			return fmt.Errorf("Dangerous new chain")
 		}
 	} else {
+		// (A) PBFT finality protection. A reorg must never revert blocks at
+		// or below the height finalized by PBFT consensus (endorsed by
+		// >= 2/3 of producers). This check is structurally scoped to the
+		// PBFT engine and deliberately does NOT depend on whether the local
+		// signer set has been loaded yet, otherwise freshly started /
+		// syncing nodes silently lose the protection.
+		if ie, ok := bc.engine.(irreversibleEngine); ok {
+			if irreversible := ie.GetIrreversibleHeight(); irreversible > 0 && len(oldChain) > 0 &&
+				oldChain[len(oldChain)-1].NumberU64() <= irreversible {
+				defer func() {
+					bc.dangerousFeed.Send(DangerousChainSideEvent{})
+				}()
+				return fmt.Errorf("reorg of PBFT finalized chain, finalized height:%d, from:%d, to:%d",
+					irreversible, oldChain[0].NumberU64(), oldChain[len(oldChain)-1].NumberU64())
+			}
+		}
+		// (B) Depth backstop (unchanged): deep reorgs are impossible under
+		// PBFT finality and always indicate an attack (e.g. feeding a forged
+		// chain).
 		if bc.engine.SignersCount() > 0 && len(oldChain) >= IrreversibleHeight {
 			defer func() {
 				bc.dangerousFeed.Send(DangerousChainSideEvent{})

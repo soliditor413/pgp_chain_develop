@@ -57,3 +57,8 @@ oracle/package.json
 BlacklistManager.sol
 IBlacklistManager.sol
 MinerManager.sol
+.workbuddy/
+SECURITY_AUDIT_REPORT.md
+SECURITY_FIX_REPORT.md
+ELAMINTER_AUDIT_REPORT.md
+third_party/

@@ -68,6 +68,14 @@ type StateTransition struct {
 	data       []byte
 	state      vm.StateDB
 	evm        *vm.EVM
+	// refundable tracks the amount actually deducted from the sender in
+	// buyGas and not yet returned. Every refund to the sender (remaining
+	// gas refund and fee give-back) must go through capRefund so that the
+	// total amount returned can never exceed what was deducted. This is a
+	// consensus-level invariant: for free transactions the deduction is
+	// capped by the account balance, and without this guard the uncapped
+	// refund would mint coins out of thin air.
+	refundable *big.Int
 }
 
 // Message represents a message sent to a contract.
@@ -222,7 +230,31 @@ func (st *StateTransition) buyGas() error {
 		}
 	}
 	st.state.SubBalance(st.msg.From(), mgval)
+	// Record the amount actually deducted (after the free-tx balance cap) as
+	// the upper bound of all subsequent refunds to the sender.
+	st.refundable = new(big.Int).Set(mgval)
 	return nil
+}
+
+// capRefund caps a refund to the amount actually paid by the sender and not
+// yet refunded, and debits that amount from the refundable budget. It
+// enforces the invariant "total refunds <= amount deducted in buyGas".
+// For ordinary transactions the budget equals gasLimit*gasPrice and the cap
+// is never hit; for free transactions whose deduction was capped by the
+// account balance it prevents the refund logic from minting coins.
+func (st *StateTransition) capRefund(amount *big.Int) *big.Int {
+	if amount == nil || amount.Sign() <= 0 {
+		return new(big.Int)
+	}
+	if st.refundable == nil {
+		return new(big.Int)
+	}
+	capped := amount
+	if amount.Cmp(st.refundable) > 0 {
+		capped = new(big.Int).Set(st.refundable)
+	}
+	st.refundable = new(big.Int).Sub(st.refundable, capped)
+	return capped
 }
 
 func (st *StateTransition) preCheck() error {
@@ -339,7 +371,10 @@ func (st *StateTransition) TransitionDb() (result *ExecutionResult, err error) {
 	minerFee := new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice)
 
 	if isRechargeTx || isRefundWithdrawTx || isBlacklistVoteTx {
-		st.state.AddBalance(st.msg.From(), minerFee)
+		// The fee give-back to the sender is also bounded by the refundable
+		// budget, otherwise a free transaction with a capped deduction would
+		// mint the difference.
+		st.state.AddBalance(st.msg.From(), st.capRefund(minerFee))
 	} else {
 		developerAddress := st.evm.ChainConfig().DeveloperContract
 		num := len(developerAddress)
@@ -443,9 +478,10 @@ func (st *StateTransition) refundGas() {
 	}
 	st.gas += refund
 
-	// Return ETH for remaining gas, exchanged at the original rate.
+	// Return ETH for remaining gas, exchanged at the original rate, but
+	// never more than the amount actually deducted from the sender.
 	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gas), st.gasPrice)
-	st.state.AddBalance(st.msg.From(), remaining)
+	st.state.AddBalance(st.msg.From(), st.capRefund(remaining))
 
 	// Also return remaining gas to the block gas counter so it is
 	// available for the next transaction.
@@ -456,9 +492,10 @@ func (st *StateTransition) refundCostGas() {
 	refund := st.gasUsed()
 	st.gas += refund
 
-	// Return ETH for remaining gas, exchanged at the original rate.
+	// Return ETH for remaining gas, exchanged at the original rate, but
+	// never more than the amount actually deducted from the sender.
 	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gas), st.gasPrice)
-	st.state.AddBalance(st.msg.From(), remaining)
+	st.state.AddBalance(st.msg.From(), st.capRefund(remaining))
 	// Also return remaining gas to the block gas counter so it is
 	// available for the next transaction.
 	st.gp.AddGas(st.gas)
