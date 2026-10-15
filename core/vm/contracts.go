@@ -222,6 +222,18 @@ func ActivePrecompiles(rules params.Rules) []common.Address {
 
 // RunPrecompiledContract runs and evaluates the output of a precompiled contract.
 func RunPrecompiledContract(p PrecompiledContract, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
+	// Defense in depth: custom precompiles (1009-1012) touch local leveldb,
+	// the SPV module and the PBFT engine; any missed nil/length check there
+	// would otherwise panic and kill the node process. Convert a panic into
+	// a plain execution error and consume all supplied gas.
+	defer func() {
+		if r := recover(); r != nil {
+			log.Error("precompiled contract panicked", "err", r)
+			ret = nil
+			remainingGas = 0
+			err = fmt.Errorf("precompiled contract panicked: %v", r)
+		}
+	}()
 	gasCost := p.RequiredGas(input)
 	if suppliedGas < gasCost {
 		return nil, 0, ErrOutOfGas
@@ -1492,8 +1504,7 @@ func (c *getMainChainRechargeData) RequiredGas(input []byte) uint64 {
 }
 
 func (c *getMainChainRechargeData) Run(input []byte) ([]byte, error) {
-	elaHash := getData(input, 0, 32)
-	hash := common.BytesToHash(elaHash).String()
+	hash := parsePrecompileTxID(input)
 	if err := spv.TrySetRechargeDataFromSpvService(hash); err != nil {
 		log.Error("TrySetRechargeDataFromSpvService failed", "error", err)
 		return []byte{}, err
@@ -1589,9 +1600,18 @@ func (c *getWithdrawData) RequiredGas(input []byte) uint64 {
 	return 0
 }
 
+// parsePrecompileTxID extracts the 32-byte transaction id from the head of
+// the precompile input. Both getMainChainRechargeData (1009) and
+// getWithdrawData (1010) are staticcall'ed by ELAMinter with
+// abi.encode(bytes32), i.e. exactly 32 bytes starting at offset 0.
+// (C-01 regression: reading at offset 32 silently zero-padded the hash via
+// getData and made refundWithdraw permanently unusable.)
+func parsePrecompileTxID(input []byte) string {
+	return common.BytesToHash(getData(input, 0, 32)).String()
+}
+
 func (c *getWithdrawData) Run(input []byte) ([]byte, error) {
-	withdrawTxID := getData(input, 32, 32)
-	hash := common.BytesToHash(withdrawTxID).String()
+	hash := parsePrecompileTxID(input)
 	from, amount, signatures, err := withdrawfailedtx.GetVerifiedWithdrawTxValue(hash)
 	if err != nil {
 		return []byte{}, err

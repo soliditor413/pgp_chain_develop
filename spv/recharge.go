@@ -110,12 +110,22 @@ func GetRechargeDataByTxhash(elaHash string) (RechargeDatas, *big.Int, error) {
 }
 
 func TrySetRechargeDataFromSpvService(elaHash string) error {
+	// C-03 fix: this function is reachable from a public precompile
+	// (getMainChainRechargeData, address 1009). A short hash would panic on
+	// elaHash[0:2], and a nil SpvService would SIGSEGV the whole node below.
+	// Both must be plain errors instead of process-killing panics.
+	if len(elaHash) < 2 {
+		return errors.New("ela hash too short")
+	}
 	if elaHash[0:2] == "0x" {
 		elaHash = elaHash[2:]
 	}
 	fee, addr, output := FindOutputFeeAndaddressByTxHash(elaHash)
 	var blackAddr ethCommon.Address
 	if fee.Cmp(new(big.Int)) <= 0 && output.Cmp(new(big.Int)) <= 0 && addr == blackAddr {
+		if SpvService == nil {
+			return errors.New("spv service is not initialized")
+		}
 		txID, err := common.Uint256FromHexString(elaHash)
 		if err != nil {
 			return err
@@ -124,10 +134,11 @@ func TrySetRechargeDataFromSpvService(elaHash string) error {
 		if err != nil {
 			return err
 		}
-		tx.IsTransferCrossChainAssetTx()
+		// Check tx for nil before calling any method on it.
 		if tx == nil || tx.TxType() != typeCommon.TransferCrossChainAsset {
 			return errors.New("not recharge tx: " + elaHash)
 		}
+		tx.IsTransferCrossChainAssetTx()
 		SavePayloadInfo(tx, nil)
 	}
 	return nil
