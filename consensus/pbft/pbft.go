@@ -1119,19 +1119,11 @@ func (p *Pbft) verifyConfirm(confirm *payload.Confirm, elaHeight uint64, timeSta
 	var producers [][]byte
 	minSignCount := 0
 	if elaHeight == 0 {
-		// CRC consensus mode: votes must come from the CRC arbiter set.
-		if spv.SpvService != nil {
-			producers = spv.GetCRCPublicKeys(spv.GetSpvHeight())
+		list := make([][]byte, len(p.GetPbftConfig().Producers))
+		for i, p := range p.GetPbftConfig().Producers {
+			list[i] = common.FromHex(p)
 		}
-		if len(producers) == 0 {
-			// The SPV service is unavailable (unit tests, or an SPV outage
-			// on a running node). Fall back to the producer set of the
-			// local consensus view rather than panic or silently skipping
-			// the membership check: the set still originates from the
-			// consensus state, never from untrusted network input.
-			log.Warn("[verifyConfirm] crc producers unavailable from spv, fall back to consensus view producers")
-			producers = p.dispatcher.GetConsensusView().GetProducers()
-		}
+		producers = list
 		if len(producers) == 0 {
 			return errors.New("[verifyConfirm] can not determine producer set for confirm verification")
 		}

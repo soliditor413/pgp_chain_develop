@@ -33,14 +33,14 @@ func CheckConfirm(confirm *payload.Confirm, producers [][]byte, minSignCount int
 		if len(producer) == 0 || bytes.Equal(producer, make([]byte, len(producer))) {
 			continue
 		}
-		producerSet[string(producer)] = struct{}{}
+		producerSet[common.BytesToHexString(producer)] = struct{}{}
 	}
 	if len(producerSet) == 0 {
 		return errors.New("[CheckConfirm] producer set has no valid member")
 	}
 
 	// The sponsor of the proposal must be a producer of the set.
-	if _, ok := producerSet[string(confirm.Proposal.Sponsor)]; !ok {
+	if _, ok := producerSet[common.BytesToHexString(confirm.Proposal.Sponsor)]; !ok {
 		str := fmt.Sprintf("[CheckConfirm] proposal sponsor %s is not in producer set",
 			common.BytesToHexString(confirm.Proposal.Sponsor))
 		Error(str)
@@ -69,7 +69,7 @@ func CheckConfirm(confirm *payload.Confirm, producers [][]byte, minSignCount int
 		}
 
 		// Only votes from producers of the set count towards finality.
-		if _, ok := producerSet[string(vote.Signer)]; !ok {
+		if _, ok := producerSet[common.BytesToHexString(vote.Signer)]; !ok {
 			str := fmt.Sprintf("[CheckConfirm] vote signer %s is not in producer set",
 				common.BytesToHexString(vote.Signer))
 			Error(str)
@@ -77,7 +77,7 @@ func CheckConfirm(confirm *payload.Confirm, producers [][]byte, minSignCount int
 		}
 
 		// Reject duplicated votes from the same signer.
-		if _, ok := signedProducers[string(vote.Signer)]; ok {
+		if _, ok := signedProducers[common.BytesToHexString(vote.Signer)]; ok {
 			str := fmt.Sprintf("[CheckConfirm] duplicated vote from signer %s",
 				common.BytesToHexString(vote.Signer))
 			Error(str)
