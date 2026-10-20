@@ -54,8 +54,8 @@ func CheckConfirm(confirm *payload.Confirm, producers [][]byte, minSignCount int
 
 	proposalHash := confirm.Proposal.Hash()
 	signedProducers := make(map[string]struct{}, len(confirm.Votes))
-	validVotes := 0
-	for _, vote := range confirm.Votes {
+	for i := range confirm.Votes {
+		vote := &confirm.Votes[i]
 		if !vote.Accept {
 			Error("confirm contains reject vote", vote.Hash().String())
 			return errors.New("[CheckConfirm] confirm contains " +
@@ -68,37 +68,45 @@ func CheckConfirm(confirm *payload.Confirm, producers [][]byte, minSignCount int
 				"invalid vote")
 		}
 
+		// One canonical key for this signer. The very same key MUST be used
+		// for the membership lookup, the duplication lookup and the insert
+		// below: mixing encodings (hex vs raw bytes) makes the duplication
+		// lookup miss forever, which lets a single signer stuff the ballot
+		// and reach minSignCount alone.
+		signerKey := common.BytesToHexString(vote.Signer)
+
 		// Only votes from producers of the set count towards finality.
-		if _, ok := producerSet[common.BytesToHexString(vote.Signer)]; !ok {
+		if _, ok := producerSet[signerKey]; !ok {
 			str := fmt.Sprintf("[CheckConfirm] vote signer %s is not in producer set",
-				common.BytesToHexString(vote.Signer))
+				signerKey)
 			Error(str)
 			return errors.New(str)
 		}
 
 		// Reject duplicated votes from the same signer.
-		if _, ok := signedProducers[common.BytesToHexString(vote.Signer)]; ok {
+		if _, ok := signedProducers[signerKey]; ok {
 			str := fmt.Sprintf("[CheckConfirm] duplicated vote from signer %s",
-				common.BytesToHexString(vote.Signer))
+				signerKey)
 			Error(str)
 			return errors.New(str)
 		}
 
-		if err := CheckVote(&vote); err != nil {
+		if err := CheckVote(vote); err != nil {
 			Error("check vote error", "error", err.Error())
 			return errors.New("[CheckConfirm] confirm contain invalid " +
 				"vote: " + err.Error())
 		}
 
-		signedProducers[string(vote.Signer)] = struct{}{}
-		validVotes++
+		signedProducers[signerKey] = struct{}{}
 	}
 
-	// Count unique producer votes only after membership and duplication
-	// checks, so a single signer can never reach the threshold alone.
-	if validVotes < minSignCount {
+	// The threshold is compared against the size of the deduplicated signer
+	// set, never against a separately maintained counter: a second counter
+	// can silently drift from the map and reintroduce ballot stuffing.
+	uniqueVotes := len(signedProducers)
+	if uniqueVotes < minSignCount {
 		str := fmt.Sprintf("[CheckConfirm] error, need %d votes, got %d unique producer votes",
-			minSignCount, validVotes)
+			minSignCount, uniqueVotes)
 		Error(str)
 		return errors.New(str)
 	}

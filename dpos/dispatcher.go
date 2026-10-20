@@ -334,17 +334,25 @@ func (d *Dispatcher) UpdatePrecociousProposals() *payload.DPOSProposal {
 	return nil
 }
 
+// alreadyExistVote reports whether this signer has already voted on the
+// proposal being processed, in either direction.
+//
+// Deduplicating by vote hash is not sufficient: DPOSProposalVote.Hash() covers
+// the Accept flag, so one signer could register an accept vote AND a reject
+// vote for the same proposal. Keying on the signer enforces the
+// one-vote-per-producer invariant.
 func (d *Dispatcher) alreadyExistVote(v *payload.DPOSProposalVote) bool {
-	_, ok := d.acceptVotes[v.Hash()]
-	if ok {
-		Info("[alreadyExistVote]: ", common.BytesToHexString(v.Signer), "already in the AcceptVotes!")
-		return true
-	}
+	signer := common.BytesToHexString(v.Signer)
 
-	_, ok = d.rejectedVotes[v.Hash()]
-	if ok {
-		Info("[alreadyExistVote]: ", common.BytesToHexString(v.Signer), "already in the RejectedVotes!")
-		return true
+	for _, votes := range []map[common.Uint256]*payload.DPOSProposalVote{
+		d.acceptVotes, d.rejectedVotes,
+	} {
+		for _, existing := range votes {
+			if common.BytesToHexString(existing.Signer) == signer {
+				Info("[alreadyExistVote]: ", signer, "already voted on this proposal!")
+				return true
+			}
+		}
 	}
 
 	return false

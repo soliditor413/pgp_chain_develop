@@ -15,8 +15,25 @@ import (
 	"github.com/pgprotocol/pgp-chain/common"
 )
 
-var defaultCRCSignerNumber = 12
 var zero = common.Hex2Bytes("000000000000000000000000000000000000000000000000000000000000000000")
+
+// MajorityCount returns the minimum number of distinct signers required for a
+// strict 2/3 majority out of totalSigner.
+//
+// The result is rounded UP: integer truncation of 2*n/3 silently lowers the
+// threshold below two thirds for most set sizes (n=4 -> 2, n=5 -> 3, n=7 -> 4,
+// n=8 -> 5), and degrades to zero for n=1, which would accept a confirm
+// carrying no votes at all. A majority can never be less than one.
+func MajorityCount(totalSigner int) int {
+	if totalSigner <= 0 {
+		return 0
+	}
+	minSignCount := (2*totalSigner + 2) / 3 // ceil(2*n/3)
+	if minSignCount < 1 {
+		minSignCount = 1
+	}
+	return minSignCount
+}
 
 type Producers struct {
 	totalProducers int
@@ -35,7 +52,6 @@ func NewProducers(producers [][]byte, startHeight uint64) *Producers {
 		dutyIndex:     0,
 		workingHeight: startHeight,
 	}
-	defaultCRCSignerNumber = len(producers)
 	sort.Slice(producers, func(i, j int) bool {
 		return bytes.Compare(producers[i], producers[j]) < 0
 	})
@@ -174,21 +190,21 @@ func (p *Producers) ProducerIndex(signer []byte) int {
 
 func (p *Producers) GetMajorityCount() int {
 	p.mtx.Lock()
-	minSignCount := int(float64(p.totalProducers) * 2 / 3)
+	total := p.totalProducers
 	p.mtx.Unlock()
-	return minSignCount
-
+	return MajorityCount(total)
 }
 
+// GetCRMajorityCount returns the majority for the producer set this instance
+// actually holds. It used to read a package level variable written by the last
+// NewProducers call, which could disagree with the set being validated (a
+// larger value stalls the chain, a smaller one collapses the threshold).
 func (p *Producers) GetCRMajorityCount() int {
-	return p.GetMajorityCountByTotalSigners(defaultCRCSignerNumber)
+	return p.GetMajorityCount()
 }
 
 func (p *Producers) GetMajorityCountByTotalSigners(totalSigner int) int {
-	p.mtx.Lock()
-	minSignCount := int(float64(totalSigner) * 2 / 3)
-	p.mtx.Unlock()
-	return minSignCount
+	return MajorityCount(totalSigner)
 }
 
 func (p *Producers) GetProducersCount() int {

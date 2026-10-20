@@ -1119,15 +1119,25 @@ func (p *Pbft) verifyConfirm(confirm *payload.Confirm, elaHeight uint64, timeSta
 	var producers [][]byte
 	minSignCount := 0
 	if elaHeight == 0 {
-		list := make([][]byte, len(p.GetPbftConfig().Producers))
-		for i, p := range p.GetPbftConfig().Producers {
-			list[i] = common.FromHex(p)
+		list := make([][]byte, 0, len(p.GetPbftConfig().Producers))
+		for _, hexKey := range p.GetPbftConfig().Producers {
+			key := common.FromHex(hexKey)
+			// Skip malformed or placeholder entries: they can never sign,
+			// so counting them would push the threshold out of reach.
+			if len(key) == 0 || bytes.Equal(key, make([]byte, len(key))) {
+				continue
+			}
+			list = append(list, key)
 		}
 		producers = list
 		if len(producers) == 0 {
 			return errors.New("[verifyConfirm] can not determine producer set for confirm verification")
 		}
-		minSignCount = p.dispatcher.GetConsensusView().GetCRMajorityCount()
+		// The threshold must be derived from the very set used to validate
+		// the votes below. Reading it from the consensus view (or from a
+		// package level variable) risks validating against one set while
+		// requiring a majority of another.
+		minSignCount = dpos.MajorityCount(len(producers))
 	} else {
 		list, count, err := spv.GetProducers(elaHeight)
 		if err != nil {

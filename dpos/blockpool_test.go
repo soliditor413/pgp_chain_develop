@@ -80,6 +80,10 @@ func (b *mockBlock) GetHeight() uint64 {
 	return b.header.Height
 }
 
+func (b *mockBlock) Time() uint64 {
+	return uint64(b.header.Timestamp)
+}
+
 func verifyConfirm(confirm *payload.Confirm, elaHeight uint64, timestamp int64) error {
 	return nil
 }
